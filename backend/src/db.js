@@ -31,6 +31,9 @@ export async function connectDb({ ephemeral = false } = {}) {
   }
 
   await mongoose.connect(uri, { serverSelectionTimeoutMS: 10000 });
+  if (ephemeral) {
+    await mongoose.connection.dropDatabase().catch(() => {});
+  }
   return mongoose.connection;
 }
 
