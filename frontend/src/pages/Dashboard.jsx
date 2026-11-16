@@ -6,11 +6,14 @@ import {
   CalendarCheck,
   CloudSun,
   Droplets,
+  FlaskConical,
   HeartPulse,
   History,
   Info,
   Megaphone,
+  Mic,
   Minus,
+  Scale,
   ScanLine,
   Sprout,
   TrendingUp,
@@ -133,6 +136,39 @@ export default function Dashboard() {
             {a.message}
           </Alert>
         ))}
+
+        {/* Kisan Mitra Core AI Capabilities Banner */}
+        <div className="grid grid-3">
+          <Link to="/app/assistant" className="card card-pad stack-xs" style={{ background: 'var(--green-50)', border: '1px solid var(--green-200)', textDecoration: 'none' }}>
+            <div className="row-center gap-xs" style={{ color: 'var(--green-800)', fontWeight: 700 }}>
+              <Mic size={20} />
+              Kisan Voice Assistant
+            </div>
+            <p className="tiny subtle" style={{ color: 'var(--green-900)' }}>
+              Speak questions in Hindi, Tamil, Telugu, Kannada, or English. Instant spoken audio answers.
+            </p>
+          </Link>
+
+          <Link to="/app/soil" className="card card-pad stack-xs" style={{ background: 'var(--surface)', border: '1px solid var(--line)', textDecoration: 'none' }}>
+            <div className="row-center gap-xs" style={{ color: 'var(--ink)', fontWeight: 700 }}>
+              <FlaskConical size={20} style={{ color: 'var(--green-700)' }} />
+              Soil Health & Fertilizer
+            </div>
+            <p className="tiny subtle">
+              Upload Soil Health Card for OCR analysis and exact bags of Urea, DAP, and MOP per acre.
+            </p>
+          </Link>
+
+          <Link to="/app/produce" className="card card-pad stack-xs" style={{ background: 'var(--surface)', border: '1px solid var(--line)', textDecoration: 'none' }}>
+            <div className="row-center gap-xs" style={{ color: 'var(--ink)', fontWeight: 700 }}>
+              <Scale size={20} style={{ color: 'var(--green-700)' }} />
+              Produce Grader & Price
+            </div>
+            <p className="tiny subtle">
+              Photograph harvested produce for AGMARK Grade A/B/C and live APMC Mandi rate estimation.
+            </p>
+          </Link>
+        </div>
 
         {isNew ? (
           <Card>
