@@ -1,0 +1,32 @@
+# dependencies
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# secrets and local config
+.env
+.env.*
+!.env.example
+
+# build output
+dist/
+coverage/
+
+# local data
+backend/uploads/
+backend/.data/
+*.log
+
+# training artefacts (the exported .onnx files ARE committed; checkpoints are not)
+*.pt
+*.pth
+ml-service/training/data/
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.claude/
