@@ -15,7 +15,7 @@ import path from 'node:path';
 export const uploadDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cropguard-test-'));
 
 process.env.NODE_ENV = 'test';
-process.env.MONGO_URI = 'memory';
+process.env.MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/cropguard_test';
 process.env.JWT_SECRET = 'test-secret';
 process.env.STORAGE_DRIVER = 'local';
 process.env.UPLOAD_DIR = uploadDir;
