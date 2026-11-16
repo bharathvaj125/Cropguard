@@ -1,0 +1,7 @@
+# Install the CPU build of PyTorch first:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+-r requirements.txt
+torch>=2.5
+torchvision>=0.20
+onnx>=1.17
+pyarrow>=18
