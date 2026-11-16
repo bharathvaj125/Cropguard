@@ -1,0 +1,5 @@
+# Keep Unix line endings in the repository so scripts and Dockerfiles work on Linux servers.
+* text=auto eol=lf
+*.onnx binary
+*.png binary
+*.jpg binary

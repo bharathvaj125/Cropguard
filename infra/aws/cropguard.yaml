@@ -204,6 +204,8 @@ Resources:
             set -euxo pipefail
             # Any failure tells CloudFormation straight away instead of timing out.
             trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource Instance --region ${AWS::Region}' ERR
+            # cloud-init runs this without HOME; the Docker CLI and buildx need it for their config.
+            export HOME=/root
 
             dnf install -y docker git jq aws-cfn-bootstrap
             systemctl enable --now docker
