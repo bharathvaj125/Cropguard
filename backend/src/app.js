@@ -9,6 +9,7 @@ import { config } from './config.js';
 import { errorHandler, notFound } from './middleware/error.js';
 import activityRoutes from './routes/activities.js';
 import adminRoutes from './routes/admin.js';
+import advisoryRoutes from './routes/advisory.js';
 import analysisRoutes from './routes/analyses.js';
 import authRoutes from './routes/auth.js';
 import dashboardRoutes from './routes/dashboard.js';
@@ -79,6 +80,7 @@ export function createApp() {
   app.use('/api/knowledge', knowledgeRoutes);
   app.use('/api/soil', soilRoutes);
   app.use('/api/produce', produceRoutes);
+  app.use('/api/advisory', advisoryRoutes);
   app.use('/api/admin', adminRoutes);
 
   app.use(notFound);
