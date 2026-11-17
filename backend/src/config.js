@@ -64,6 +64,31 @@ export const config = {
   // Optional. Without a key the market module serves the bundled sample series.
   dataGovApiKey: env.DATA_GOV_API_KEY || '',
 
+  // Claude for the crop advisory. Off unless configured; the rule-based almanac answers otherwise.
+  //   LLM_PROVIDER    "bedrock" | "anthropic" | "off". When unset: Bedrock if BEDROCK_MODEL_ID is
+  //                   set, else the Claude API if ANTHROPIC_API_KEY is set, else off.
+  llm: {
+    provider: (env.LLM_PROVIDER || '').toLowerCase(),
+    bedrockModelId: env.BEDROCK_MODEL_ID || '',
+    bedrockRegion: env.BEDROCK_REGION || env.AWS_REGION || 'ap-south-1',
+    anthropicApiKey: env.ANTHROPIC_API_KEY || '',
+    anthropicModel: env.ANTHROPIC_MODEL || 'claude-sonnet-5-5',
+    effort: env.LLM_EFFORT || 'medium',
+    timeoutMs: Number(env.LLM_TIMEOUT_MS || 45000),
+    // Retry on another Claude model when the first one declines a request.
+    refusalFallback: env.LLM_REFUSAL_FALLBACK !== 'off',
+  },
+
+  // AWS speech services. Both are off by default so local development needs no AWS account.
+  speech: {
+    pollyEnabled: env.POLLY_ENABLED === 'true',
+    pollyRegion: env.POLLY_REGION || env.AWS_REGION || 'ap-south-1',
+    transcribeEnabled: env.TRANSCRIBE_ENABLED === 'true',
+    transcribeRegion: env.TRANSCRIBE_REGION || env.AWS_REGION || 'ap-south-1',
+    // Below nginx's 10 MB body limit, leaving room for the multipart envelope.
+    maxAudioBytes: Number(env.STT_MAX_MB || 8) * 1024 * 1024,
+  },
+
   seed: {
     adminEmail: env.SEED_ADMIN_EMAIL || 'admin@cropguard.local',
     adminPassword: env.SEED_ADMIN_PASSWORD || '',

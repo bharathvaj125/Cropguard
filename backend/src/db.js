@@ -31,7 +31,8 @@ export async function connectDb({ ephemeral = false } = {}) {
   }
 
   await mongoose.connect(uri, { serverSelectionTimeoutMS: 10000 });
-  if (ephemeral) {
+  // Tests start from an empty database, but only ever wipe a throw-away or *_test database.
+  if (ephemeral && (memoryServer || mongoose.connection.name.endsWith('_test'))) {
     await mongoose.connection.dropDatabase().catch(() => {});
   }
   return mongoose.connection;

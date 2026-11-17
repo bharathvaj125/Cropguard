@@ -18,6 +18,7 @@ import knowledgeRoutes from './routes/knowledge.js';
 import marketRoutes from './routes/market.js';
 import produceRoutes from './routes/produce.js';
 import soilRoutes from './routes/soil.js';
+import speechRoutes from './routes/speech.js';
 import weatherRoutes from './routes/weather.js';
 import { mlStatus } from './services/mlClient.js';
 
@@ -80,7 +81,8 @@ export function createApp() {
   app.use('/api/knowledge', knowledgeRoutes);
   app.use('/api/soil', soilRoutes);
   app.use('/api/produce', produceRoutes);
-  app.use('/api/advisory', advisoryRoutes);
+  app.use('/api/advisory', advisoryRoutes); // chat: /ask, /crops, /languages, /history
+  app.use('/api/advisory', speechRoutes); // cloud: /cloud-status, /tts, /stt, /llm
   app.use('/api/admin', adminRoutes);
 
   app.use(notFound);

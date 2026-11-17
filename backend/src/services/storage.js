@@ -38,11 +38,17 @@ function localDriver() {
       if (!key) return;
       await fs.rm(resolve(key), { force: true }).catch(() => {});
     },
+    async exists(key) {
+      return fs.access(resolve(key)).then(() => true, () => false);
+    },
+    s3Uri() {
+      return null; // only the S3 driver can hand files to other AWS services
+    },
   };
 }
 
 async function s3Driver() {
-  const { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } = await import('@aws-sdk/client-s3');
+  const { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand } = await import('@aws-sdk/client-s3');
   const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
   const { s3Bucket: Bucket, s3Region, s3Prefix, s3UrlTtlSeconds } = config.storage;
   if (!Bucket) throw new Error('STORAGE_DRIVER=s3 needs S3_BUCKET to be set');
@@ -68,6 +74,12 @@ async function s3Driver() {
       if (!key) return;
       await client.send(new DeleteObjectCommand({ Bucket, Key: full(key) })).catch(() => {});
     },
+    async exists(key) {
+      return client.send(new HeadObjectCommand({ Bucket, Key: full(key) })).then(() => true, () => false);
+    },
+    s3Uri(key) {
+      return `s3://${Bucket}/${full(key)}`;
+    },
   };
 }
 
@@ -88,6 +100,13 @@ export const storage = {
   },
   async remove(key) {
     return (await get()).remove(key);
+  },
+  async exists(key) {
+    return (await get()).exists(key);
+  },
+  /** `s3://bucket/key` for services such as Transcribe that read from S3; null on local disk. */
+  async s3Uri(key) {
+    return (await get()).s3Uri(key);
   },
   async driverName() {
     return (await get()).name;

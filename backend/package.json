@@ -15,7 +15,12 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/bedrock-sdk": "^1.1.2",
+    "@anthropic-ai/sdk": "^1.9.0",
+    "@aws-sdk/client-polly": "^3.1170.0",
     "@aws-sdk/client-s3": "^3.1169.0",
+    "@aws-sdk/client-transcribe": "^3.1170.0",
+    "@aws-sdk/client-transcribe-streaming": "^3.1170.0",
     "@aws-sdk/s3-request-presigner": "^3.1169.0",
     "bcryptjs": "^3.0.3",
     "compression": "^1.8.2",

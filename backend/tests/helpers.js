@@ -15,7 +15,10 @@ import path from 'node:path';
 export const uploadDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cropguard-test-'));
 
 process.env.NODE_ENV = 'test';
-process.env.MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/cropguard_test';
+// Tests never use MONGO_URI (it may point at a real database). By default they start a throw-away
+// in-memory MongoDB. To speed things up with a local server, opt in with TEST_MONGO_URI; the database
+// name must end in "_test" because it is wiped before each test file.
+process.env.MONGO_URI = process.env.TEST_MONGO_URI || 'memory';
 process.env.JWT_SECRET = 'test-secret';
 process.env.STORAGE_DRIVER = 'local';
 process.env.UPLOAD_DIR = uploadDir;
