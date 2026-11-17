@@ -15,8 +15,11 @@ const Farms = lazy(() => import('./pages/Farms.jsx'));
 const HistoryPage = lazy(() => import('./pages/History.jsx'));
 const Library = lazy(() => import('./pages/Library.jsx'));
 const Market = lazy(() => import('./pages/Market.jsx'));
+const ProduceGrader = lazy(() => import('./pages/ProduceGrader.jsx'));
 const Profile = lazy(() => import('./pages/Profile.jsx'));
 const Scan = lazy(() => import('./pages/Scan.jsx'));
+const SoilDoctor = lazy(() => import('./pages/SoilDoctor.jsx'));
+const VoiceAssistant = lazy(() => import('./pages/VoiceAssistant.jsx'));
 const Weather = lazy(() => import('./pages/Weather.jsx'));
 const AdminAdvisories = lazy(() => import('./pages/admin/AdminAdvisories.jsx'));
 const AdminFarms = lazy(() => import('./pages/admin/AdminFarms.jsx'));
@@ -57,6 +60,9 @@ export default function App() {
 
       <Route path="/app" element={<RequireAuth><Layout /></RequireAuth>}>
         <Route index element={<Dashboard />} />
+        <Route path="assistant" element={<VoiceAssistant />} />
+        <Route path="soil" element={<SoilDoctor />} />
+        <Route path="produce" element={<ProduceGrader />} />
         <Route path="scan" element={<Scan />} />
         <Route path="history" element={<HistoryPage />} />
         <Route path="history/:id" element={<AnalysisDetail />} />
