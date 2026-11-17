@@ -23,12 +23,26 @@ import { Link } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ChartTip, Legend } from '../components/charts.jsx';
 import { SERIES, axisProps, gridProps } from '../lib/chartTheme.js';
-import { Alert, Badge, Card, EmptyState, ErrorAlert, Loading, PageHeader, Sparkline, StatCard } from '../components/ui.jsx';
+import { Alert, Badge, Card, EmptyState, ErrorAlert, Loading, Sparkline, StatCard } from '../components/ui.jsx';
+import { CountUp } from '../components/brand.jsx';
 import { useAuth } from '../lib/auth.jsx';
 import { ACTIVITY_TYPES, formatRupees, formatShortDate, relativeDay, signed } from '../lib/format.js';
 import { useApi } from '../lib/useApi.js';
 import { AnalysisRow } from './History.jsx';
 import { WeatherIcon } from './Weather.jsx';
+
+const MODULES = [
+  { to: '/app/assistant', icon: Mic, title: 'Voice assistant', text: 'Ask in Hindi, Tamil, Telugu, Kannada or English and hear the answer.', tint: '#e3f6d3', ink: '#145f1d' },
+  { to: '/app/soil', icon: FlaskConical, title: 'Soil Doctor', text: 'Photograph your Soil Health Card and get exact bags of Urea, DAP and MOP.', tint: '#fbf1d6', ink: '#8a5a00' },
+  { to: '/app/produce', icon: Scale, title: 'Produce grader', text: 'Grade your harvest A, B or C and see the price it can fetch.', tint: '#efe6ff', ink: '#5b3fb5' },
+];
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
 
 const ADVISORY_TONE = { info: 'info', warning: 'warn', critical: 'bad' };
 
@@ -124,11 +138,20 @@ export default function Dashboard() {
 
   return (
     <>
-      <PageHeader title={`Hello, ${firstName}`} subtitle="Here is how your crops, weather and markets look today.">
-        <Link className="btn" to="/app/scan">
-          <ScanLine size={17} /> Scan a crop
-        </Link>
-      </PageHeader>
+      <section className="welcome">
+        <img className="mark hide-sm" src="/brand/logo-mark.webp" alt="" />
+        <div className="stack-sm welcome-body">
+          <h1>
+            {greeting()}, {firstName}
+          </h1>
+          <p>Here is how your crops, weather and markets look today.</p>
+          <div className="row-wrap" style={{ marginTop: 8 }}>
+            <Link className="btn" to="/app/scan">
+              <ScanLine size={17} /> Scan a crop <ArrowRight size={16} className="arrow" />
+            </Link>
+          </div>
+        </div>
+      </section>
 
       <div className="stack">
         {advisories.map((a) => (
@@ -137,37 +160,20 @@ export default function Dashboard() {
           </Alert>
         ))}
 
-        {/* Kisan Mitra Core AI Capabilities Banner */}
-        <div className="grid grid-3">
-          <Link to="/app/assistant" className="card card-pad stack-xs" style={{ background: 'var(--green-50)', border: '1px solid var(--green-200)', textDecoration: 'none' }}>
-            <div className="row-center gap-xs" style={{ color: 'var(--green-800)', fontWeight: 700 }}>
-              <Mic size={20} />
-              Kisan Voice Assistant
-            </div>
-            <p className="tiny subtle" style={{ color: 'var(--green-900)' }}>
-              Speak questions in Hindi, Tamil, Telugu, Kannada, or English. Instant spoken audio answers.
-            </p>
-          </Link>
-
-          <Link to="/app/soil" className="card card-pad stack-xs" style={{ background: 'var(--surface)', border: '1px solid var(--line)', textDecoration: 'none' }}>
-            <div className="row-center gap-xs" style={{ color: 'var(--ink)', fontWeight: 700 }}>
-              <FlaskConical size={20} style={{ color: 'var(--green-700)' }} />
-              Soil Health & Fertilizer
-            </div>
-            <p className="tiny subtle">
-              Upload Soil Health Card for OCR analysis and exact bags of Urea, DAP, and MOP per acre.
-            </p>
-          </Link>
-
-          <Link to="/app/produce" className="card card-pad stack-xs" style={{ background: 'var(--surface)', border: '1px solid var(--line)', textDecoration: 'none' }}>
-            <div className="row-center gap-xs" style={{ color: 'var(--ink)', fontWeight: 700 }}>
-              <Scale size={20} style={{ color: 'var(--green-700)' }} />
-              Produce Grader & Price
-            </div>
-            <p className="tiny subtle">
-              Photograph harvested produce for AGMARK Grade A/B/C and live APMC Mandi rate estimation.
-            </p>
-          </Link>
+        <div className="grid grid-3 stagger">
+          {MODULES.map(({ to, icon: Icon, title, text, tint, ink }) => (
+            <Link key={to} to={to} className="module-card hover-lift" style={{ '--tint': tint, '--tint-ink': ink }}>
+              <span className="icon">
+                <Icon size={22} />
+              </span>
+              <span className="grow">
+                <strong className="row-center gap-xs">
+                  {title} <ArrowRight size={15} className="arrow" />
+                </strong>
+                <p>{text}</p>
+              </span>
+            </Link>
+          ))}
         </div>
 
         {isNew ? (
@@ -187,21 +193,21 @@ export default function Dashboard() {
           </Card>
         ) : null}
 
-        <div className="grid grid-4">
-          <StatCard icon={ScanLine} label="Scans in the last 30 days" value={stats.scans30} hint={`${stats.totalScans} in total`} />
-          <StatCard icon={AlertTriangle} tone={stats.issues30 ? 'bad' : undefined} label="Problems found (30 days)" value={stats.issues30} />
+        <div className="grid grid-4 stagger">
+          <StatCard icon={ScanLine} label="Scans in the last 30 days" value={<CountUp value={stats.scans30} />} hint={`${stats.totalScans} in total`} />
+          <StatCard icon={AlertTriangle} tone={stats.issues30 ? 'bad' : undefined} label="Problems found (30 days)" value={<CountUp value={stats.issues30} />} />
           <StatCard
             icon={HeartPulse}
             tone="info"
             label="Healthy scans (30 days)"
-            value={stats.healthRate30 == null ? '–' : `${stats.healthRate30}%`}
+            value={stats.healthRate30 == null ? '–' : <CountUp value={stats.healthRate30} suffix="%" />}
             hint={stats.healthRate30 == null ? 'No scans yet' : `${stats.healthy30} of ${stats.scans30}`}
           />
           <StatCard
             icon={CalendarCheck}
             tone={stats.overdueActivities ? 'warn' : undefined}
             label="Planned activities"
-            value={stats.plannedActivities}
+            value={<CountUp value={stats.plannedActivities} />}
             hint={stats.overdueActivities ? `${stats.overdueActivities} overdue` : `${stats.doneThisMonth} done this month`}
           />
         </div>

@@ -6,7 +6,6 @@ import {
   FlaskConical,
   History,
   LayoutDashboard,
-  Leaf,
   LogOut,
   Megaphone,
   Menu,
@@ -51,10 +50,12 @@ const ADMIN_NAV = [
 export function Brand({ to = '/' }) {
   return (
     <Link to={to} className="brand">
-      <span className="brand-mark">
-        <Leaf size={19} />
+      <span className="brand-tile">
+        <img src="/brand/logo-mark.webp" alt="" />
       </span>
-      CropGuard
+      <span className="brand-name">
+        Crop<b>Guard</b>
+      </span>
     </Link>
   );
 }
@@ -135,7 +136,9 @@ export default function Layout() {
       <main className="main">
         <div className="container">
           <Suspense fallback={<Loading />}>
-            <Outlet />
+            <div key={location.pathname} className="page-enter">
+              <Outlet />
+            </div>
           </Suspense>
         </div>
       </main>

@@ -5,21 +5,27 @@
 
 /* ---------- tokens ---------- */
 :root {
-  --green-950: #052e16;
-  --green-900: #14532d;
-  --green-800: #166534;
-  --green-700: #15803d;
-  --green-600: #16a34a;
-  --green-200: #bbf7d0;
-  --green-100: #dcfce7;
-  --green-50: #f0fdf4;
+  /* brand: taken from the CropGuard logo */
+  --green-950: #062e14;
+  --green-900: #0b4d1b;
+  --green-800: #145f1d;
+  --green-700: #22760f; /* buttons: 5.4:1 against white text */
+  --green-600: #36a024;
+  --green-200: #c6efa6;
+  --green-100: #e3f6d3;
+  --green-50: #f3fbec;
+  --lime: #8fd13c;
+  --gold: #e2b33c;
+  --gold-bg: #fbf1d6;
+  --brand-gradient: linear-gradient(135deg, #8fd13c 0%, #36a024 45%, #0b4d1b 100%);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 
   --ink: #17231c;
   --ink-2: #4a5a50;
   --ink-3: #7a877f;
   --line: #e3e8e4;
   --line-strong: #cdd5cf;
-  --bg: #f5f7f4;
+  --bg: #f5f9f2;
   --surface: #ffffff;
   --surface-2: #f9faf8;
 

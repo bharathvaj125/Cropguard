@@ -1,4 +1,5 @@
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Info, X, XCircle } from 'lucide-react';
+import { BrandLoader } from './brand.jsx';
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 /* ---------- small building blocks ---------- */
@@ -8,11 +9,7 @@ export function Spinner({ small, light }) {
 }
 
 export function Loading() {
-  return (
-    <div className="loading">
-      <Spinner />
-    </div>
-  );
+  return <BrandLoader />;
 }
 
 export function Button({ variant = 'primary', size, block, busy, icon: Icon, children, className = '', ...props }) {

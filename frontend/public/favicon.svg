@@ -1,4 +1,32 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="8" fill="#14532d"/>
-  <path d="M24 8C15 8 9 12.5 9 19c0 1.4.300 2.7.900 3.8C11.7 18 15 14.5 19.5 12.5 16 15 13.5 18.5 12 23.5c1 .3 2 .5 3 .5 6 0 9-6 9-16z" fill="#bbf7d0"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 110">
+  <!-- Simplified CropGuard shield for small sizes: shield, sprout, scan corners, fields. -->
+  <defs>
+    <linearGradient id="shield" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8fd13c"/>
+      <stop offset="0.55" stop-color="#2f8a12"/>
+      <stop offset="1" stop-color="#0a5a22"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a6e04f"/>
+      <stop offset="1" stop-color="#2f8f17"/>
+    </linearGradient>
+    <clipPath id="inner">
+      <path d="M50 12C61 19 74 22 85 24V50C85 72 69 88 50 97C31 88 15 72 15 50V24C26 22 39 19 50 12Z"/>
+    </clipPath>
+  </defs>
+  <path d="M50 3C63 12 79 16 94 18V50C94 79 73 97 50 107C27 97 6 79 6 50V18C21 16 37 12 50 3Z" fill="url(#shield)"/>
+  <path d="M50 12C61 19 74 22 85 24V50C85 72 69 88 50 97C31 88 15 72 15 50V24C26 22 39 19 50 12Z" fill="#fff"/>
+  <g clip-path="url(#inner)">
+    <path d="M8 74Q46 62 92 70V110H8Z" fill="#3c9a1c"/>
+    <path d="M52 71Q72 64 92 66V73Q72 72 54 76Z" fill="#e2b33c"/>
+    <path d="M8 84Q48 70 92 80V110H8Z" fill="#1f7420"/>
+    <path d="M8 93Q50 80 92 90" fill="none" stroke="#fff" stroke-width="2.2"/>
+  </g>
+  <path d="M50 74V48" stroke="#1f6e1c" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M50 47C42 41 42 31 50 22C58 31 58 41 50 47Z" fill="url(#leaf)"/>
+  <path d="M50 62C41 62 32 56 27 46C38 45 47 51 50 62Z" fill="url(#leaf)"/>
+  <path d="M50 62C59 62 68 56 73 46C62 45 53 51 50 62Z" fill="url(#leaf)"/>
+  <g fill="none" stroke="#3fa52a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M31 32V26H37"/><path d="M63 26H69V32"/>
+  </g>
 </svg>

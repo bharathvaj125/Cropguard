@@ -1,21 +1,34 @@
-import { Check } from 'lucide-react';
+import { Check, Leaf, Sprout } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Brand } from '../components/Layout.jsx';
 import { Alert, Button, TextField } from '../components/ui.jsx';
 import { useAuth } from '../lib/auth.jsx';
+
+const POINTS = [
+  'Disease and pest detection from a single photo',
+  'Soil Health Card read into exact fertiliser bags',
+  'Ask by voice in Hindi, Tamil, Telugu and more',
+  'Weather advice and mandi prices for your crops',
+];
 
 function AuthShell({ title, subtitle, children, footer }) {
   return (
     <div className="auth">
       <aside className="auth-art">
-        <Brand />
+        <Leaf className="leaf-float" size={120} style={{ top: '14%', right: '-18px', animationDelay: '-2s' }} aria-hidden="true" />
+        <Sprout className="leaf-float" size={90} style={{ bottom: '18%', right: '22%', animationDelay: '-5s' }} aria-hidden="true" />
+        <Leaf className="leaf-float" size={64} style={{ bottom: '6%', left: '-10px', transform: 'rotate(140deg)' }} aria-hidden="true" />
+        <Link to="/" aria-label="CropGuard home">
+          <img className="auth-logo" src="/brand/logo-full.webp" alt="CropGuard" />
+        </Link>
         <div>
           <h2>Healthy crops start with early answers.</h2>
-          <ul>
-            <li><Check size={18} /> Disease and pest detection from a single photo</li>
-            <li><Check size={18} /> Weather advice for each of your farms</li>
-            <li><Check size={18} /> Market price trends for your crops</li>
+          <ul className="stagger">
+            {POINTS.map((p) => (
+              <li key={p}>
+                <Check size={18} /> {p}
+              </li>
+            ))}
           </ul>
         </div>
         <p className="tiny" style={{ opacity: 0.7 }}>
@@ -24,7 +37,11 @@ function AuthShell({ title, subtitle, children, footer }) {
       </aside>
       <main className="auth-form">
         <div className="stack">
-          <div className="hide-art">
+          <Link to="/" className="auth-mobile-logo" aria-label="CropGuard home">
+            <img src="/brand/logo-mark.webp" alt="" />
+            <img src="/brand/logo-wordmark.webp" alt="CropGuard" />
+          </Link>
+          <div>
             <h1>{title}</h1>
             <p className="muted" style={{ marginTop: 6 }}>{subtitle}</p>
           </div>
