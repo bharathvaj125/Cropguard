@@ -1,8 +1,8 @@
 name: CI
 
+# Every branch, so feature branches (track-b-cloud-ai, lingesh, ...) are checked before merging.
 on:
   push:
-    branches: [main]
   pull_request:
 
 jobs:

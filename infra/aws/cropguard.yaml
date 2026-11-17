@@ -26,6 +26,17 @@ Parameters:
     Default: ''
     NoEcho: true
     Description: Optional data.gov.in key for live mandi prices. Leave empty to use the sample series.
+  BedrockModelId:
+    Type: String
+    Default: anthropic.claude-sonnet-5-5
+    Description: >-
+      Claude model for the crop advisory, through Amazon Bedrock. Enable access to it in the
+      Bedrock console first. Leave empty to use only the offline rule-based advisory.
+  EnableVoice:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: Amazon Polly text-to-speech and Amazon Transcribe speech-to-text for the voice assistant.
   EnableCloudFront:
     Type: String
     Default: 'true'
@@ -41,6 +52,8 @@ Parameters:
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
 
 Conditions:
+  UseClaude: !Not [!Equals [!Ref BedrockModelId, '']]
+  UseVoice: !Equals [!Ref EnableVoice, 'true']
   UseCloudFront: !Equals [!Ref EnableCloudFront, 'true']
   IsUsEast1: !Equals [!Ref 'AWS::Region', us-east-1]
 
@@ -140,6 +153,35 @@ Resources:
                 Effect: Allow
                 Action: secretsmanager:GetSecretValue
                 Resource: [!Ref AppSecrets, !Ref JwtSecret]
+        # Track B: Claude advisory through Bedrock (Messages API on the bedrock-mantle endpoint).
+        - !If
+          - UseClaude
+          - PolicyName: cropguard-claude
+            PolicyDocument:
+              Statement:
+                - Sid: InvokeClaude
+                  Effect: Allow
+                  Action: bedrock-mantle:CreateInference
+                  # Narrow to the model ARNs once your account's model access is set up.
+                  Resource: '*'
+          - !Ref AWS::NoValue
+        # Track B: Polly voices and Transcribe speech recognition. Neither service supports
+        # resource-level permissions for these actions, so the resource is '*'.
+        - !If
+          - UseVoice
+          - PolicyName: cropguard-speech
+            PolicyDocument:
+              Statement:
+                - Sid: Speech
+                  Effect: Allow
+                  Action:
+                    - polly:SynthesizeSpeech
+                    - transcribe:StartStreamTranscription
+                    - transcribe:StartTranscriptionJob
+                    - transcribe:GetTranscriptionJob
+                    - transcribe:DeleteTranscriptionJob
+                  Resource: '*'
+          - !Ref AWS::NoValue
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -244,6 +286,10 @@ Resources:
             SEED_ADMIN_EMAIL=${AdminEmail}
             SEED_ADMIN_PASSWORD=$ADMIN_PASSWORD
             DATA_GOV_API_KEY=${DataGovApiKey}
+            BEDROCK_MODEL_ID=${BedrockModelId}
+            BEDROCK_REGION=${AWS::Region}
+            POLLY_ENABLED=${EnableVoice}
+            TRANSCRIBE_ENABLED=${EnableVoice}
             EOF
 
             docker compose up -d --build

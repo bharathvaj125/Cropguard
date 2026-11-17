@@ -49,6 +49,16 @@ services:
       SEED_FARMER_EMAIL: ${SEED_FARMER_EMAIL:-farmer@cropguard.local}
       SEED_FARMER_PASSWORD: ${SEED_FARMER_PASSWORD:-}
       DATA_GOV_API_KEY: ${DATA_GOV_API_KEY:-}
+      # Claude advisory (Track B). Bedrock uses the instance role; the Claude API needs a key.
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID:-}
+      BEDROCK_REGION: ${BEDROCK_REGION:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5-5}
+      LLM_EFFORT: ${LLM_EFFORT:-medium}
+      # AWS speech (Track B)
+      POLLY_ENABLED: ${POLLY_ENABLED:-false}
+      TRANSCRIBE_ENABLED: ${TRANSCRIBE_ENABLED:-false}
     volumes:
       - uploads:/app/uploads
 
