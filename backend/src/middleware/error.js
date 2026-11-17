@@ -14,10 +14,12 @@ export function errorHandler(err, _req, res, _next) {
 
   if (err instanceof multer.MulterError) {
     status = 400;
+    const audio = err.field === 'audio';
+    const limitMb = Math.round((audio ? config.speech.maxAudioBytes : config.upload.maxBytes) / 1024 / 1024);
     message =
       err.code === 'LIMIT_FILE_SIZE'
-        ? `Image is too large. The limit is ${Math.round(config.upload.maxBytes / 1024 / 1024)} MB.`
-        : 'Upload failed. Send a single image in the "image" field.';
+        ? `${audio ? 'Recording' : 'Image'} is too large. The limit is ${limitMb} MB.`
+        : `Upload failed. Send a single file in the "${audio ? 'audio' : 'image'}" field.`;
   } else if (err.name === 'ValidationError') {
     // mongoose schema validation
     status = 400;

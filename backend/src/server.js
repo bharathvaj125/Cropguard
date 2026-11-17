@@ -2,6 +2,7 @@ import { createApp } from './app.js';
 import { config } from './config.js';
 import { connectDb, disconnectDb } from './db.js';
 import { ensureSeedUsers } from './scripts/seedUsers.js';
+import { llmStatus } from './services/claudeAdvisor.js';
 import { ensureSampleData, syncAgmarknet } from './services/market.js';
 
 const SIX_HOURS = 6 * 60 * 60 * 1000;
@@ -25,6 +26,11 @@ async function main() {
   console.log(`database: connected (${config.mongoUri === 'memory' ? 'local mongod via mongodb-memory-server' : 'MONGO_URI'})`);
 
   await ensureSeedUsers();
+
+  const llm = llmStatus();
+  console.log(llm.enabled ? `advisory: Claude via ${llm.provider} (${llm.model})` : 'advisory: Claude not configured, rule-based answers only');
+  if (llm.warning) console.warn(`advisory: ${llm.warning}`);
+  console.log(`speech: Polly ${config.speech.pollyEnabled ? 'on' : 'off'}, Transcribe ${config.speech.transcribeEnabled ? 'on' : 'off'}`);
   await refreshMarketData();
   setInterval(refreshMarketData, SIX_HOURS).unref();
 

@@ -15,6 +15,7 @@ import dashboardRoutes from './routes/dashboard.js';
 import farmRoutes from './routes/farms.js';
 import knowledgeRoutes from './routes/knowledge.js';
 import marketRoutes from './routes/market.js';
+import speechRoutes from './routes/speech.js';
 import weatherRoutes from './routes/weather.js';
 import { mlStatus } from './services/mlClient.js';
 
@@ -75,6 +76,7 @@ export function createApp() {
   app.use('/api/market', marketRoutes);
   app.use('/api/dashboard', dashboardRoutes);
   app.use('/api/knowledge', knowledgeRoutes);
+  app.use('/api/advisory', speechRoutes);
   app.use('/api/admin', adminRoutes);
 
   app.use(notFound);
