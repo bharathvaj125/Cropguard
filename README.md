@@ -50,12 +50,12 @@ Measured once on held-out test images the models never saw during training or mo
 |---|---|---|---|---|---|
 | Disease (PlantVillage) | 38 | 10,709 | **99.1%** | 99.95% | 0.991 |
 | Pest (IP102, regrouped) | 26 | 20,343 | **82.2%** | 92.7% | 0.814 |
-| Produce quality (FruitNet) | 18 | 1,951 | **PRODUCE_ACC** | PRODUCE_TOP3 | PRODUCE_F1 |
+| Produce quality (FruitNet) | 18 | 1,951 | **99.85%** | 100% | 0.996 |
 
 Temperature scaling cut the expected calibration error from 11.2% to 0.3% (disease), 9.2% to 0.9% (pest) and
-PRODUCE_ECE (produce), so a
+12.4% to 0.2% (produce), so a
 "90% confident" result is right about 90% of the time. See [docs/ML_MODEL.md](docs/ML_MODEL.md) for
-the training method, per-class results and **known limitations**. Accuracy on real field photos will
+the training method, per-class results and **known limitations** (including a near-duplicate check on the produce test set: on the 528 test photos with no look-alike in training, accuracy is still 99.8%). Accuracy on real field photos will
 be lower than these benchmark figures.
 
 ## Quick start (local, no Docker)

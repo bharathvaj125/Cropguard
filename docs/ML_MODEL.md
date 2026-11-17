@@ -1,6 +1,6 @@
 # ML models
 
-CropGuard uses two image classifiers. Both are **MobileNetV3-Large** networks pretrained on ImageNet-1k and
+CropGuard uses three image classifiers. All are **MobileNetV3-Large** networks pretrained on ImageNet-1k and
 fully fine-tuned with PyTorch, then exported to ONNX for serving.
 
 | | Disease model | Pest model |
@@ -14,6 +14,33 @@ fully fine-tuned with PyTorch, then exported to ONNX for serving.
 | Test macro F1 | 0.991 | 0.814 |
 | Calibration error (ECE), before → after temperature scaling | 11.2% → 0.3% | 9.2% → 0.9% |
 | Model size | 17 MB | 17 MB |
+
+### Produce quality model (FruitNet)
+
+| | Produce model |
+|---|---|
+| Task | Fruit type and quality of a photographed lot -> Grade A (Good), B (Mixed), C (Bad) |
+| Dataset | FruitNet: Indian fruits of different quality (Meshram & Patil, 2022), CC BY 4.0, via Project AgML |
+| Classes | 18: apple, banana, guava, lemon/lime, orange, pomegranate x Good / Mixed / Bad |
+| Train / val / test images | 9,262 (capped at 700 per class) / 1,951 / 1,951, seeded 80/10/10 split per class |
+| **Test top-1 accuracy** | **99.85%** (grade alone: 99.85%; fruit alone: 100%) |
+| Test macro F1 | 0.996 (weakest class: Orange Mixed, F1 0.96, only 12 test photos) |
+| Calibration error (ECE) | 12.4% -> 0.2% |
+
+Two dataset quirks were handled before training. Lemon appears only as "Mixed" and lime only as "Good" or "Bad",
+which would teach a model that lemons are always mixed quality; the two look alike in photos, so they are merged into
+one class. "Mixed" photos are rare (113-285 per fruit against ~1,100 for the others); class weighting compensates.
+
+**Near-duplicate check.** FruitNet contains many photos of the same lots and has no official split, so a random
+split leaks look-alike photos between training and test. A 16x16 difference hash found a near-identical training
+photo for 1,000 of the 1,951 test photos (143 exact duplicates). The model was therefore also scored on test photos
+with no look-alike in training: 99.7% on 951 photos (hash distance > 20 of 256 bits) and 99.8% on 528 photos
+(distance > 60). The score is not an artefact of leakage, but FruitNet photos are clean close-ups of a few fruits
+on plain backgrounds, so, as with PlantVillage, real mandi photos will be harder. The check is recorded in
+`ml-service/models/produce/metrics.json`.
+
+The backend uses the model only for these six fruits. Other produce is graded by Claude vision when it is
+configured, and otherwise by a basic colour check that is labelled as such and capped at 40% confidence.
 
 Exact figures, per-class precision / recall / F1 and the full confusion matrix are in
 `ml-service/models/<name>/metrics.json` and are shown in the admin panel.
