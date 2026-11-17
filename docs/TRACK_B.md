@@ -11,8 +11,7 @@ This branch (`track-b-cloud-ai`) adds the cloud pieces of the voice assistant an
 | Deployment | IAM permissions, CloudFormation parameters, Docker env, `.env.example` | `infra/aws/cropguard.yaml`, `docker-compose.yml` |
 | Tests | 25 tests with fake AWS / Claude clients (65 backend tests in total) | `backend/tests/trackb.test.js` |
 
-New files only, plus small additive edits to shared files, so merging with the `lingesh` branch should not
-conflict with `advisory.js`, `routes/advisory.js` or `VoiceAssistant.jsx`.
+Merged with Lingesh's `lingesh` branch (soil, produce and advisory modules) into `main`.
 
 ## Differences from the task sheet, and why
 
@@ -25,61 +24,18 @@ conflict with `advisory.js`, `routes/advisory.js` or `VoiceAssistant.jsx`.
 | Accept `.wav`, `.webm`, `.mp3` | WAV, Ogg-Opus, FLAC stream in real time; WebM, MP3, MP4/M4A, Ogg-Vorbis use a batch job | Transcribe's real-time API only takes PCM, FLAC and Ogg-Opus. The frontend helper converts every recording to 16 kHz WAV in the browser, so in practice everything takes the fast streaming path and no S3 is needed. |
 | Two endpoints | Also `GET /api/advisory/cloud-status` and `POST /api/advisory/llm` | `cloud-status` tells the UI which cloud features are on, so it does not have to guess. `llm` lets the Claude path be tried on its own; the chat endpoint will call `generateLlmAdvisory` directly. |
 
-## Connecting it to the `lingesh` branch
+## How it is connected (merged with the `lingesh` branch)
 
-### Backend: `generateCropAdvisory()` in `backend/src/services/advisory.js`
+| Feature | Claude / AWS piece | Fallback when it is off or fails |
+|---|---|---|
+| Voice assistant answers (`POST /api/advisory/ask`) | `generateLlmAdvisory()` with the farm's state, soil, irrigation and crops, plus the last few turns of the conversation, so Claude remembers the answers to its own follow-up questions | Lingesh's crop almanac rules (`services/advisory.js`) |
+| Voice input (`VoiceAssistant.jsx`) | `startRecording()` + `transcribe()` -> Amazon Transcribe | The browser's Web Speech API, then the text box |
+| Spoken answers | `speak()` -> Amazon Polly (Hindi, English) | Browser speech synthesis (all languages) |
+| Soil Health Card reading (`POST /api/soil/extract`) | Claude vision reads the photo or PDF; impossible values are dropped; the farmer reviews every value | The farmer types the values into the same review table |
+| Produce grading (`POST /api/produce/grade`) | Claude vision grades produce the trained model does not know | The trained FruitNet model first; a clearly labelled basic colour check last |
 
-Add Claude in front of the rule-based answer. Adjust the field names to match the existing function:
-
-```js
-import { generateLlmAdvisory } from './claudeAdvisor.js';
-
-export async function generateCropAdvisory({ query, language, context, history }) {
-  // 1. Claude, when configured. Returns null when it is off, offline, too slow or declines.
-  const ai = await generateLlmAdvisory({ query, language, context, history });
-  if (ai) {
-    return {
-      body: ai.body,
-      voiceSummary: ai.voiceSummary,
-      missingContextQuestions: ai.missingContextQuestions,
-      source: 'claude',
-    };
-  }
-
-  // 2. Existing almanac / ICAR rules, unchanged.
-  // ...
-}
-```
-
-`context` accepts `state`, `district`, `farmLocation`, `crop`, `soilType`, `irrigation`, `areaAcres`,
-`season`, `weather` and `soilTest`. `history` is the earlier turns as `{ role: 'user' | 'assistant', content }`:
-pass the last few messages from `AdvisoryChat` so Claude remembers the answers to its own follow-up questions.
-
-The two endpoints from the task sheet (`/tts`, `/stt`) are already mounted at `/api/advisory` by
-`routes/speech.js`. Express allows two routers on the same prefix, so the existing `routes/advisory.js`
-keeps working; just make sure its paths do not also define `/tts`, `/stt`, `/llm` or `/cloud-status`.
-
-### Frontend: `VoiceAssistant.jsx`
-
-```js
-import { speak, startRecording, stopSpeaking, transcribe } from '../lib/cloudVoice.js';
-
-// Mic button
-const rec = await startRecording();       // on press
-const blob = await rec.stop();            // on release
-try {
-  const { transcript } = await transcribe(blob, language);
-  setInput(transcript);
-} catch (err) {
-  // err.details?.fallback === 'browser' -> cloud recognition is off: use the existing Web Speech API path
-}
-
-// Reading the answer aloud: Polly for Hindi / English, browser voice for the rest
-await speak(answer.voiceSummary, language);
-```
-
-`speak()` and `transcribe()` never leave the user stuck: when Polly or Transcribe is off, unsupported for the
-language, or failing, they fall back to the browser's speech features or tell the user to type.
+Each answer records which engine produced it (`source: "claude" | "rules"`, `method: "model" | "claude" | "basic"`,
+`valueSource: "claude" | "manual" | "text"`), and the UI shows it, so a farmer always knows how much to trust a result.
 
 ## Configuration
 
@@ -135,4 +91,4 @@ the instance role `bedrock-mantle:CreateInference`, `polly:SynthesizeSpeech` and
 | Real Anthropic SDK and real Bedrock client against a local stand-in server | Correct request: `/v1/messages`, structured-output and fallback betas, SigV4-signed for `ap-south-1` on Bedrock, no `fallbacks` field sent to Bedrock; answer parsed |
 | Frontend helper in a real browser | MediaRecorder (WebM/Opus) -> 16 kHz mono 16-bit WAV; `/stt` takes the streaming path; Polly failure falls back to the browser voice |
 | Real AWS calls | **Not run:** no AWS credentials on the development machine. Both Polly and Transcribe calls reached the AWS SDK and stopped only at "could not load credentials" |
-| Integration with `lingesh` | **Not done:** that branch has not been pushed to GitHub yet |
+| Integration with `lingesh` | Done: merged into `main`, with integration tests for the chat, soil reading and produce grading paths |

@@ -21,6 +21,10 @@ export const COMMODITIES = [
   { name: 'Apple', base: 8600, seasonal: 0.2, noise: 0.018, perishable: true },
   { name: 'Grapes', base: 6200, seasonal: 0.24, noise: 0.025, perishable: true },
   { name: 'Orange', base: 4300, seasonal: 0.2, noise: 0.022, perishable: true },
+  { name: 'Banana', base: 1900, seasonal: 0.15, noise: 0.02, perishable: true },
+  { name: 'Guava', base: 2900, seasonal: 0.25, noise: 0.03, perishable: true },
+  { name: 'Pomegranate', base: 9200, seasonal: 0.18, noise: 0.02, perishable: true },
+  { name: 'Lemon', base: 4600, seasonal: 0.3, noise: 0.035, perishable: true },
 ];
 
 /** `factor` nudges a market above or below the national level. */

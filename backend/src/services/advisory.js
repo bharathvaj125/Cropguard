@@ -171,6 +171,9 @@ export function generateCropAdvisory({ query, language = 'en', context = {} }) {
   // Language localization for voiceSummary when non-English is requested
   const localizedVoice = localizeVoiceSummary(voiceSummary, language, crop?.name);
 
+  // Bullet characters become markdown list items so the screen renders a real list.
+  body = body.replace(/^• /gm, '- ');
+
   return {
     crop: crop?.id || 'general',
     cropName: crop?.name || 'General Agriculture',

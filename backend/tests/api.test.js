@@ -10,6 +10,7 @@ import request from 'supertest';
 import { createApp } from '../src/app.js';
 import { connectDb, disconnectDb } from '../src/db.js';
 import { User } from '../src/models/User.js';
+import { COMMODITIES } from '../src/data/marketCatalogue.js';
 import { ensureSampleData } from '../src/services/market.js';
 
 const PASSWORD = 'harvest2026';
@@ -313,7 +314,7 @@ describe('market', () => {
   test('unknown series is a 404 and overview has one row per commodity', async () => {
     assert.equal((await api.get('/api/market/series?commodity=Unobtainium&market=Pune').set(auth(token))).status, 404);
     const rows = (await api.get('/api/market/overview').set(auth(token))).body.rows;
-    assert.equal(rows.length, 14);
+    assert.equal(rows.length, COMMODITIES.length);
     assert.ok(rows[0].sparkline.length > 5);
   });
 });

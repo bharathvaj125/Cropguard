@@ -56,6 +56,24 @@ the API, and the API's decision rules (thresholds, crop filtering, severity) can
 
 If the ML service is down or slow (30 s timeout) the user gets a clear 503 and nothing is stored.
 
+## Voice, soil and produce modules: best engine first, honest fallback
+
+Each Kisan Mitra module tries the strongest engine available and falls back step by step. The result always
+records which engine produced it, and the UI shows that to the farmer.
+
+| Module | 1st | 2nd | Last resort |
+|---|---|---|---|
+| Advisory chat (`/api/advisory/ask`) | Claude, with farm context and recent turns | Crop almanac rules | - |
+| Voice input | Amazon Transcribe (recording converted to 16 kHz WAV in the browser) | Browser Web Speech API | Text box |
+| Voice output | Amazon Polly (Hindi, English) | Browser speech synthesis | Text on screen |
+| Soil card values | Claude vision (photo or PDF), then farmer review | Farmer types values | - |
+| Produce grade | FruitNet model (apple, banana, guava, lemon/lime, orange, pomegranate) | Claude vision | Basic colour check, labelled, confidence <= 40% |
+
+Claude calls go through one helper (`services/claudeAdvisor.js` -> `callClaudeStructured`) that uses structured
+outputs (a JSON schema per task), a 45-second timeout, refusal fallbacks, and returns `null` on any failure so the
+next tier runs. Prompts for soil cards forbid estimating unreadable values, and every number read from a card passes
+a physical-range check (`SOIL_LIMITS`) before it is used.
+
 ## Data model (MongoDB)
 
 | Collection | Key fields | Notes |
@@ -67,6 +85,9 @@ If the ML service is down or slow (30 s timeout) the user gets a clear 503 and n
 | `marketprices` | commodity, market, state, date, min/max/modal price, source (`sample`/`agmarknet`/`manual`) | Unique on (commodity, market, date) |
 | `advisories` | title, message, severity, state (empty = everyone), active, expiresAt | Shown on farmer dashboards |
 | `auditlogs` | actor, action, target, summary, ip | Append-only |
+| `advisorychats` | user, farm, query, language, crop, topic, source (`claude`/`rules`), response {title, body, voiceSummary, keyActions, missingContextQuestions} | Last turns feed Claude's context |
+| `soilanalyses` | user, farm, sampleId, crop, area, valueSource, parameters {value, unit, rating}, fertilizerPlan {bags, schedule}, recommendations | Card image or PDF in storage |
+| `producegradings` | user, farm, commodity, grade, confidence, method (`model`/`claude`/`basic`), qualityProbabilities, defects, warnings, priceEstimate | Photo in storage |
 
 Deleting a farm keeps its scans and activities but unlinks them. Deleting a user removes all their records
 and stored photos.

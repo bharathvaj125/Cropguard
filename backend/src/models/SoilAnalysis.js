@@ -51,6 +51,8 @@ const soilAnalysisSchema = new mongoose.Schema(
     },
 
     unreadableFields: [{ type: String }],
+    // Where the numbers came from: typed or confirmed by the farmer, read by Claude, or pasted text.
+    valueSource: { type: String, enum: ['manual', 'claude', 'text', 'none'], default: 'manual' },
     overallHealth: {
       type: String,
       enum: ['excellent', 'good', 'moderate', 'degraded'],

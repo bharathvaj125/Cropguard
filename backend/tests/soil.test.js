@@ -156,8 +156,7 @@ describe('soil API endpoints', () => {
       .delete(`/api/soil/${createdSoilId}`)
       .set('Authorization', `Bearer ${farmerToken}`);
 
-    assert.equal(res.status, 200);
-    assert.equal(res.body.ok, true);
+    assert.equal(res.status, 204);
 
     const check = await SoilAnalysis.findById(createdSoilId);
     assert.equal(check, null);

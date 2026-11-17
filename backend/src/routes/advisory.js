@@ -6,6 +6,7 @@ import { AdvisoryChat } from '../models/AdvisoryChat.js';
 import { Farm } from '../models/Farm.js';
 import { audit } from '../services/audit.js';
 import { generateCropAdvisory, SUPPORTED_LANGUAGES } from '../services/advisory.js';
+import { generateLlmAdvisory } from '../services/claudeAdvisor.js';
 import { ApiError } from '../utils/errors.js';
 import { objectId, paged, pagination, parse } from '../utils/validate.js';
 
@@ -27,65 +28,95 @@ const askSchema = z.object({
     .default({}),
 });
 
-router.post('/ask', async (req, res, next) => {
-  try {
-    const input = parse(askSchema, req.body);
+const HISTORY_WINDOW_MS = 2 * 60 * 60 * 1000;
 
-    let farm = null;
-    let autoContext = { ...input.context };
+router.post('/ask', async (req, res) => {
+  const input = parse(askSchema, req.body);
 
-    if (input.farmId) {
-      farm = await Farm.findOne({ _id: input.farmId, user: req.user._id });
-      if (farm) {
-        if (!autoContext.location && farm.location?.state) autoContext.location = farm.location.state;
-        if (!autoContext.soilType && farm.soilType) autoContext.soilType = farm.soilType;
-        if (!autoContext.crop && farm.crop) autoContext.crop = farm.crop;
-      }
-    }
+  let farm = null;
+  const context = { ...input.context };
+  if (input.farmId) {
+    farm = await Farm.findOne({ _id: input.farmId, owner: req.user._id });
+    if (!farm) throw ApiError.badRequest('That farm does not exist');
+    context.location ||= [farm.location?.district, farm.location?.state].filter(Boolean).join(', ') || farm.location?.name || '';
+    context.state ||= farm.location?.state || '';
+    if (!context.soilType && farm.soilType && farm.soilType !== 'other') context.soilType = farm.soilType;
+    if (!context.irrigation && farm.irrigationType && farm.irrigationType !== 'other') context.irrigation = farm.irrigationType;
+    if (!context.crop && farm.crops?.length) context.crop = farm.crops.join(', ');
+    if (farm.areaAcres) context.areaAcres = farm.areaAcres;
+  }
 
-    const advisory = generateCropAdvisory({
-      query: input.query,
-      language: input.language,
-      context: autoContext,
-    });
+  // 1. Claude, with the last few turns of this conversation so it remembers the answers to its
+  //    own follow-up questions. Returns null when it is not configured or cannot answer.
+  const recent = await AdvisoryChat.find({ user: req.user._id, createdAt: { $gte: new Date(Date.now() - HISTORY_WINDOW_MS) } })
+    .sort({ createdAt: -1 })
+    .limit(3)
+    .lean();
+  const history = recent.reverse().flatMap((c) => [
+    { role: 'user', content: c.query },
+    { role: 'assistant', content: c.response.body },
+  ]);
+  const ai = await generateLlmAdvisory({
+    query: input.query,
+    language: input.language,
+    context: { ...context, farmLocation: context.location },
+    history,
+  });
 
-    const chatDoc = await AdvisoryChat.create({
-      user: req.user._id,
-      farm: farm?._id || null,
-      query: input.query,
-      language: input.language,
-      crop: advisory.crop,
-      detectedTopic: advisory.topic,
-      response: {
-        title: advisory.title,
-        body: advisory.body,
-        voiceSummary: advisory.voiceSummary,
-        keyActions: advisory.keyActions,
-        missingContextQuestions: advisory.missingContextQuestions,
-      },
-      contextProvided: autoContext,
-    });
+  // 2. Offline almanac rules.
+  const rules = generateCropAdvisory({ query: input.query, language: input.language, context });
+  const advisory = ai
+    ? { ...rules, title: ai.title, body: ai.body, voiceSummary: ai.voiceSummary, keyActions: ai.keyActions, missingContextQuestions: ai.missingContextQuestions }
+    : rules;
+  const source = ai ? 'claude' : 'rules';
 
-    await audit(req, 'advisory.query', { crop: advisory.crop, topic: advisory.topic });
-
-    res.json({
-      id: chatDoc._id.toString(),
-      query: input.query,
-      language: input.language,
-      crop: advisory.crop,
-      cropName: advisory.cropName,
-      topic: advisory.topic,
+  const chatDoc = await AdvisoryChat.create({
+    user: req.user._id,
+    farm: farm?._id || null,
+    query: input.query,
+    language: input.language,
+    crop: advisory.crop,
+    detectedTopic: advisory.topic,
+    source,
+    model: ai?.model || '',
+    response: {
       title: advisory.title,
       body: advisory.body,
       voiceSummary: advisory.voiceSummary,
       keyActions: advisory.keyActions,
       missingContextQuestions: advisory.missingContextQuestions,
-      disclaimer: advisory.disclaimer,
-      createdAt: chatDoc.createdAt,
-    });
-  } catch (err) {
-    next(err);
-  }
+    },
+    contextProvided: {
+      crop: context.crop || '',
+      location: context.location || '',
+      soilType: context.soilType || '',
+      season: context.season || '',
+      irrigation: context.irrigation || '',
+    },
+  });
+
+  await audit(req, 'advisory.query', {
+    targetType: 'AdvisoryChat',
+    targetId: chatDoc._id,
+    summary: `${source}: ${advisory.crop} / ${advisory.topic}`,
+  });
+
+  res.json({
+    id: chatDoc._id.toString(),
+    query: input.query,
+    language: input.language,
+    crop: advisory.crop,
+    cropName: advisory.cropName,
+    topic: advisory.topic,
+    title: advisory.title,
+    body: advisory.body,
+    voiceSummary: advisory.voiceSummary,
+    keyActions: advisory.keyActions,
+    missingContextQuestions: advisory.missingContextQuestions,
+    disclaimer: advisory.disclaimer,
+    source,
+    createdAt: chatDoc.createdAt,
+  });
 });
 
 router.get('/crops', (_req, res) => {
@@ -129,6 +160,7 @@ router.get('/history', async (req, res, next) => {
       language: i.language,
       crop: i.crop,
       topic: i.detectedTopic,
+      source: i.source || 'rules',
       title: i.response.title,
       body: i.response.body,
       voiceSummary: i.response.voiceSummary,

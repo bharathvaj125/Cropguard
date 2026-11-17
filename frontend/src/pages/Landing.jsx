@@ -1,10 +1,25 @@
-import { ArrowRight, Bug, Check, CloudSun, LayoutDashboard, Microscope, ShieldCheck, TrendingUp } from 'lucide-react';
+import { ArrowRight, Bug, Check, CloudSun, FlaskConical, LayoutDashboard, Mic, Microscope, Scale, ShieldCheck, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Brand } from '../components/Layout.jsx';
 import { Badge, ConfidenceBar } from '../components/ui.jsx';
 import { useAuth } from '../lib/auth.jsx';
 
 const FEATURES = [
+  {
+    icon: Mic,
+    title: 'Voice assistant',
+    text: 'Ask by voice or text in Hindi, Tamil, Telugu, Kannada and more. Claude AI answers with sowing, irrigation and fertiliser advice, and reads the summary aloud.',
+  },
+  {
+    icon: FlaskConical,
+    title: 'Soil Doctor',
+    text: 'Photograph your Soil Health Card. The values are read, checked by you, and turned into the exact bags of Urea, DAP and MOP for your field.',
+  },
+  {
+    icon: Scale,
+    title: 'Produce grader',
+    text: 'Photograph a lot to get an indicative AGMARK grade from a trained quality model, and the price range it can fetch at your mandi.',
+  },
   {
     icon: Microscope,
     title: 'Disease detection',
@@ -119,7 +134,7 @@ export default function Landing() {
             <div className="hero-points">
               <span><Check size={16} /> 14 crops, 26 diseases</span>
               <span><Check size={16} /> 25 pest groups</span>
-              <span><Check size={16} /> Results in seconds</span>
+              <span><Check size={16} /> 8 Indian languages</span>
             </div>
           </div>
 

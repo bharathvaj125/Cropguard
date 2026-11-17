@@ -129,6 +129,43 @@ export const DEFAULT_UNITS = {
 };
 
 /**
+ * Physically plausible ranges. A value outside these is a misread or a typo, never a
+ * real soil result, so it is treated as unreadable instead of being used for fertiliser maths.
+ */
+export const SOIL_LIMITS = {
+  nitrogen: [0, 2000],
+  phosphorus: [0, 500],
+  potassium: [0, 3000],
+  ph: [2, 11],
+  ec: [0, 20],
+  organicCarbon: [0, 10],
+  zinc: [0, 50],
+  iron: [0, 500],
+  sulphur: [0, 500],
+  boron: [0, 20],
+};
+
+export const SOIL_FIELDS = Object.keys(DEFAULT_UNITS);
+
+/** Keep plausible numbers; report the rest. */
+export function sanitiseSoilValues(values = {}) {
+  const clean = {};
+  const rejected = [];
+  for (const key of SOIL_FIELDS) {
+    const raw = values[key];
+    if (raw === null || raw === undefined || raw === '') continue;
+    const v = Number(raw);
+    const [min, max] = SOIL_LIMITS[key];
+    if (!Number.isFinite(v) || v < min || v > max) {
+      rejected.push({ field: key, value: raw, reason: `outside the possible range ${min}-${max}` });
+      continue;
+    }
+    clean[key] = v;
+  }
+  return { values: clean, rejected };
+}
+
+/**
  * Extract numerical soil values from raw OCR text using regex heuristics.
  * Adheres to SRS: if a parameter is not detectable, it remains unreadable.
  */

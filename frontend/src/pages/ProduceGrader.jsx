@@ -1,369 +1,358 @@
-import {
-  AlertCircle,
-  BadgeCheck,
-  History,
-  Info,
-  Loader2,
-  Scale,
-  Upload,
-} from 'lucide-react';
+import { AlertTriangle, BadgeCheck, Bot, Cpu, History, Info, Palette, Scale, Trash2, Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Alert, EmptyState } from '../components/ui.jsx';
+import { Alert, Badge, Button, ConfidenceBar, ConfirmDialog, EmptyState, useToast } from '../components/ui.jsx';
 import { api } from '../lib/api.js';
+import { formatDate, formatRupees } from '../lib/format.js';
+import { useApi } from '../lib/useApi.js';
+
+const GRADE_TONE = { 'Grade A': 'good', 'Grade B': 'warn', 'Grade C': 'bad' };
+const METHOD = {
+  model: { label: 'Trained quality model', icon: Cpu, tone: 'info', text: 'Graded by a neural network trained on Indian fruit photos (FruitNet).' },
+  claude: { label: 'Claude AI vision', icon: Bot, tone: 'info', text: 'Graded by Claude against AGMARK grade descriptions.' },
+  basic: { label: 'Basic colour check', icon: Palette, tone: 'warn', text: 'Only overall colour was checked. Use it as a rough guide.' },
+};
 
 export default function ProduceGrader() {
+  const toast = useToast();
+  const methods = useApi('/produce/methods');
+  const commodities = useApi('/market/commodities');
+  const farms = useApi('/farms');
+  const history = useApi('/produce', { limit: 9 });
+
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState('');
-  const [commodity, setCommodity] = useState('Tomato');
-  const [market, setMarket] = useState('Kolar');
+  const [commodity, setCommodity] = useState('Apple');
+  const [market, setMarket] = useState('');
   const [variety, setVariety] = useState('');
+  const [farmId, setFarmId] = useState('');
   const [notes, setNotes] = useState('');
+  const markets = useApi(commodity ? '/market/markets' : null, { commodity });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
   const [advice, setAdvice] = useState('');
-  const [history, setHistory] = useState([]);
-  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [priceNote, setPriceNote] = useState('');
+  const [removing, setRemoving] = useState(null);
 
-  const loadHistory = async () => {
-    try {
-      setLoadingHistory(true);
-      const res = await api.get('/produce');
-      setHistory(res.items || []);
-    } catch {
-      /* ignore */
-    } finally {
-      setLoadingHistory(false);
-    }
-  };
+  useEffect(() => () => preview && URL.revokeObjectURL(preview), [preview]);
 
-  useEffect(() => {
-    loadHistory();
-  }, []);
+  const modelFruits = methods.data?.model?.commodities || [];
+  const names = [...new Set([...(commodities.data?.commodities || []).map((c) => c.commodity), ...modelFruits])].sort();
+  const usesModel = methods.data?.model?.available && modelFruits.some((f) => f.toLowerCase() === commodity.toLowerCase());
+  const plannedMethod = usesModel ? 'model' : methods.data?.claude?.available ? 'claude' : 'basic';
 
-  const handleFileChange = (e) => {
-    const f = e.target.files?.[0];
+  function chooseFile(f) {
     if (!f) return;
     setFile(f);
     setPreview(URL.createObjectURL(f));
     setError('');
-  };
+  }
 
-  const handleSubmit = async (e) => {
+  async function grade(e) {
     e.preventDefault();
     if (!file) {
-      setError('Please upload or capture a photo of the produce lot to evaluate.');
+      setError('Please add a clear photo of the produce lot.');
       return;
     }
-
+    setLoading(true);
+    setError('');
+    const form = new FormData();
+    form.append('image', file);
+    form.append('commodity', commodity);
+    if (market) form.append('market', market);
+    if (variety) form.append('variety', variety);
+    if (farmId) form.append('farmId', farmId);
+    if (notes) form.append('notes', notes);
     try {
-      setLoading(true);
-      setError('');
-
-      const formData = new FormData();
-      formData.append('image', file);
-      formData.append('commodity', commodity);
-      formData.append('market', market);
-      formData.append('variety', variety);
-      formData.append('notes', notes);
-
-      const res = await api.post('/produce/grade', formData);
+      const res = await api.post('/produce/grade', form);
       setResult(res.produce);
-      setAdvice(res.advice);
-      loadHistory();
-      window.scrollTo({ top: 380, behavior: 'smooth' });
+      setAdvice(res.advice || '');
+      setPriceNote(res.priceUnavailable || '');
+      history.reload();
+      setTimeout(() => document.getElementById('produce-result')?.scrollIntoView({ behavior: 'smooth' }), 50);
     } catch (err) {
-      setError(err.message || 'Failed to grade produce lot');
+      setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  async function remove() {
+    try {
+      await api.delete(`/produce/${removing.id}`);
+      toast('Grading deleted');
+      if (result?.id === removing.id) setResult(null);
+      history.reload();
+    } catch (err) {
+      toast(err.message, 'bad');
+    }
+    setRemoving(null);
+  }
+
+  const m = result ? METHOD[result.method] || METHOD.basic : null;
+  const price = result?.priceEstimate;
 
   return (
     <div className="stack-lg">
-      <div className="page-head">
+      <header className="page-head">
         <div>
-          <div className="row-center gap-xs" style={{ color: 'var(--green-700)', fontWeight: 600, fontSize: '0.9rem' }}>
-            <BadgeCheck size={18} />
-            AGMARK Standard Produce Quality Grading & Pricing
-          </div>
-          <h1 style={{ marginTop: 4 }}>Crop Quality Grader & Mandi Price Estimator</h1>
-          <p className="subtle" style={{ maxWidth: 720 }}>
-            Photograph harvested crops, fruits, or vegetables. Our computer vision engine assesses surface uniformity, color maturity, and defects to classify Grade A, B, or C, and correlates with live APMC Mandi price trends.
-          </p>
+          <h1>Produce Grader</h1>
+          <p>Photograph a lot of fruit or vegetables to get an indicative AGMARK grade and the price range it can fetch at the mandi.</p>
         </div>
+      </header>
+
+      {error ? <Alert tone="bad">{error}</Alert> : null}
+
+      <div className="grid grid-main">
+        <form className="card card-pad stack" onSubmit={grade}>
+          <h2 className="row-center gap-xs">
+            <Scale size={18} /> Grade a lot
+          </h2>
+          <label
+            className="dropzone"
+            style={{ minHeight: 190 }}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              chooseFile(e.dataTransfer.files?.[0]);
+            }}
+          >
+            {preview ? (
+              <img src={preview} alt="Produce lot" style={{ maxHeight: 220, borderRadius: 8, objectFit: 'contain' }} />
+            ) : (
+              <div className="stack-xs align-center">
+                <Upload size={30} style={{ color: 'var(--green-600)' }} />
+                <strong>Take or upload a photo of the lot</strong>
+                <span className="tiny faint">Daylight, the whole heap or crate in view. JPG, PNG or WebP.</span>
+              </div>
+            )}
+            <input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => chooseFile(e.target.files?.[0])} />
+          </label>
+
+          <div className="form-grid">
+            <div className="field">
+              <label htmlFor="pg-commodity">Commodity</label>
+              <select
+                id="pg-commodity"
+                className="select"
+                value={commodity}
+                onChange={(e) => {
+                  setCommodity(e.target.value);
+                  setMarket('');
+                }}
+              >
+                {names.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                    {methods.data?.model?.available && modelFruits.includes(n) ? ' ★' : ''}
+                  </option>
+                ))}
+              </select>
+              {methods.data?.model?.available ? <span className="hint">★ graded by the trained quality model</span> : null}
+            </div>
+            <div className="field">
+              <label htmlFor="pg-market">Mandi</label>
+              <select id="pg-market" className="select" value={market} onChange={(e) => setMarket(e.target.value)}>
+                <option value="">Best available price data</option>
+                {(markets.data?.markets || []).map((mk) => (
+                  <option key={mk.market} value={mk.market}>
+                    {mk.market}, {mk.state}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="pg-variety">Variety</label>
+              <input id="pg-variety" className="input" maxLength={40} placeholder="Optional" value={variety} onChange={(e) => setVariety(e.target.value)} />
+            </div>
+            <div className="field">
+              <label htmlFor="pg-farm">Farm</label>
+              <select id="pg-farm" className="select" value={farmId} onChange={(e) => setFarmId(e.target.value)}>
+                <option value="">No farm</option>
+                {(farms.data?.farms || []).map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field full">
+              <label htmlFor="pg-notes">Notes</label>
+              <input id="pg-notes" className="input" maxLength={500} placeholder="e.g. 20 crates, second picking" value={notes} onChange={(e) => setNotes(e.target.value)} />
+            </div>
+          </div>
+
+          {methods.data ? (
+            <p className="tiny muted row-center gap-xs">
+              {(() => {
+                const Icon = METHOD[plannedMethod].icon;
+                return <Icon size={14} />;
+              })()}
+              Will be graded by: <strong>{METHOD[plannedMethod].label}</strong>
+            </p>
+          ) : null}
+
+          <Button type="submit" size="lg" icon={BadgeCheck} busy={loading} disabled={!file}>
+            {loading ? 'Grading…' : 'Grade and estimate price'}
+          </Button>
+        </form>
+
+        <section className="card card-pad stack">
+          <h2 className="row-center gap-xs">
+            <Info size={18} /> AGMARK grades
+          </h2>
+          <div className="stack-sm small">
+            <div>
+              <Badge tone="good">Grade A</Badge> Uniform size and colour, firm, no visible damage. Fetches 5–18% above the modal rate.
+            </div>
+            <div>
+              <Badge tone="warn">Grade B</Badge> Fair average quality: some variation and minor marks, no rot. Trades near the modal rate.
+            </div>
+            <div>
+              <Badge tone="bad">Grade C</Badge> Rot, bruising, pest damage or very mixed maturity. Sort it, or sell to processors.
+            </div>
+          </div>
+          <p className="tiny faint">A photo cannot show weight, taste or internal defects. The grade is indicative; the buyer's inspection decides the final grade.</p>
+        </section>
       </div>
 
-      {error ? <Alert tone="bad" title="Error">{error}</Alert> : null}
-
-      <div className="grid grid-2" style={{ alignItems: 'start' }}>
-        {/* Upload Form */}
-        <div className="card card-pad stack">
-          <div className="card-head" style={{ padding: 0 }}>
-            <h2>Photograph Harvest Lot</h2>
+      {result ? (
+        <section id="produce-result" className="card card-pad stack" style={{ border: '2px solid var(--green-600)' }}>
+          <div className="row between wrap" style={{ alignItems: 'flex-start' }}>
+            <div className="stack-xs">
+              <div className="row-center gap-sm wrap">
+                <span className={`badge badge-${GRADE_TONE[result.grade]}`} style={{ fontSize: '1.05rem', padding: '5px 12px' }}>
+                  {result.grade}
+                </span>
+                <strong>{result.gradeLabel}</strong>
+              </div>
+              <div className="row-center gap-xs wrap">
+                <Badge tone={m.tone} icon={m.icon}>{m.label}</Badge>
+                <span className="small muted">
+                  {result.commodity}
+                  {result.variety ? ` (${result.variety})` : ''}
+                </span>
+              </div>
+            </div>
+            <div style={{ minWidth: 220 }}>
+              <ConfidenceBar label="Confidence" value={result.confidence} primary warn={result.confidence < 0.6} />
+            </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="stack">
-            <div className="form-group">
-              <label className="label">Produce Photo (Heap or Crates)</label>
-              <div
-                style={{
-                  border: '2px dashed var(--line-strong)',
-                  borderRadius: 'var(--radius)',
-                  padding: 24,
-                  textAlign: 'center',
-                  background: preview ? 'var(--surface)' : 'var(--surface-2)',
-                  cursor: 'pointer',
-                }}
-                onClick={() => document.getElementById('produce-input').click()}
-              >
-                {preview ? (
-                  <div className="stack-xs align-center">
-                    <img
-                      src={preview}
-                      alt="Produce Preview"
-                      style={{ maxHeight: 200, borderRadius: 'var(--radius-sm)', objectFit: 'contain' }}
-                    />
-                    <div className="tiny subtle">Click to choose a different photo</div>
+          {result.warnings?.map((w) => (
+            <Alert key={w} tone="warn">{w}</Alert>
+          ))}
+          {result.summary ? <p>{result.summary}</p> : null}
+
+          <div className="grid grid-2" style={{ alignItems: 'start' }}>
+            <div className="stack">
+              {price ? (
+                <div style={{ background: 'var(--green-50)', padding: 16, borderRadius: 'var(--radius)', border: '1px solid var(--green-200)' }}>
+                  <div className="row between wrap">
+                    <strong style={{ color: 'var(--green-900)' }}>Estimated price at {price.market}</strong>
+                    <span className="tiny muted">{formatDate(price.marketDate)}</span>
                   </div>
-                ) : (
-                  <div className="stack-xs align-center">
-                    <Upload size={32} style={{ color: 'var(--green-600)', margin: '0 auto' }} />
-                    <div className="strong">Upload or Take Photo of Produce</div>
-                    <div className="tiny subtle">JPG, PNG, WebP — Good lighting gives highest grading accuracy</div>
+                  <div className="grid grid-2 text-center" style={{ marginTop: 10 }}>
+                    <div className="card card-pad" style={{ boxShadow: 'none' }}>
+                      <div className="tiny muted">Per kg</div>
+                      <div className="stat-value" style={{ color: 'var(--green-800)' }}>
+                        ₹{price.estimatedMinPerKg}–{price.estimatedMaxPerKg}
+                      </div>
+                    </div>
+                    <div className="card card-pad" style={{ boxShadow: 'none' }}>
+                      <div className="tiny muted">Per quintal</div>
+                      <div className="stat-value" style={{ color: 'var(--green-800)', fontSize: '1.3rem' }}>
+                        {formatRupees(price.estimatedMinPerQuintal)}–{formatRupees(price.estimatedMaxPerQuintal)}
+                      </div>
+                    </div>
                   </div>
-                )}
-                <input id="produce-input" type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
-              </div>
-            </div>
-
-            <div className="grid grid-2">
-              <div className="form-group">
-                <label className="label">Commodity</label>
-                <select className="select" value={commodity} onChange={(e) => setCommodity(e.target.value)}>
-                  <option value="Tomato">Tomato (टमाटर)</option>
-                  <option value="Potato">Potato (आलू)</option>
-                  <option value="Onion">Onion (प्याज)</option>
-                  <option value="Green Chilli">Green Chilli (हरी मिर्च)</option>
-                  <option value="Apple">Apple (सेब)</option>
-                  <option value="Grapes">Grapes (अंगूर)</option>
-                  <option value="Orange">Orange (संतरा)</option>
-                  <option value="Paddy">Paddy / Rice (धान)</option>
-                  <option value="Wheat">Wheat (गेहूं)</option>
-                  <option value="Maize">Maize (मक्का)</option>
-                  <option value="Soybean">Soybean (सोयाबीन)</option>
-                  <option value="Cotton">Cotton (कपास)</option>
-                  <option value="Groundnut">Groundnut (मूंगफली)</option>
-                  <option value="Bengal Gram">Bengal Gram / Chana (चना)</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="label">Target APMC Mandi</label>
-                <select className="select" value={market} onChange={(e) => setMarket(e.target.value)}>
-                  <option value="Kolar">Kolar (Karnataka)</option>
-                  <option value="Azadpur">Azadpur (Delhi)</option>
-                  <option value="Lasalgaon">Lasalgaon (Maharashtra)</option>
-                  <option value="Pune">Pune (Maharashtra)</option>
-                  <option value="Koyambedu">Koyambedu (Tamil Nadu)</option>
-                  <option value="Bowenpally">Bowenpally (Telangana)</option>
-                  <option value="Indore">Indore (Madhya Pradesh)</option>
-                  <option value="Ahmedabad">Ahmedabad (Gujarat)</option>
-                  <option value="Kolkata">Kolkata (West Bengal)</option>
-                  <option value="Lucknow">Lucknow (Uttar Pradesh)</option>
-                  <option value="Khanna">Khanna (Punjab)</option>
-                  <option value="Jaipur">Jaipur (Rajasthan)</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-2">
-              <div className="form-group">
-                <label className="label">Variety / Hybrid (Optional)</label>
-                <input
-                  type="text"
-                  className="input"
-                  placeholder="e.g. Vaishnavi, Pusa, Desi..."
-                  value={variety}
-                  onChange={(e) => setVariety(e.target.value)}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="label">Notes / Lot Size</label>
-                <input
-                  type="text"
-                  className="input"
-                  placeholder="e.g. 20 crates, 50 quintals"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <button type="submit" className="btn btn-primary" disabled={loading} style={{ justifyContent: 'center' }}>
-              {loading ? (
-                <>
-                  <Loader2 size={18} className="spin" />
-                  Grading Produce & Fetching Mandi Quotes...
-                </>
+                  <p className="tiny muted" style={{ marginTop: 8 }}>
+                    Modal rate {formatRupees(price.baseModalPricePerQuintal)}/quintal in {price.market}, {price.state}.
+                    {price.marketNote ? ` ${price.marketNote}` : ''}
+                    {price.sample ? ' Sample market data, not live mandi rates.' : ''}
+                  </p>
+                </div>
               ) : (
-                <>
-                  <Scale size={18} />
-                  Evaluate Quality Grade & Price Band
-                </>
+                <Alert tone="info">{priceNote || `No mandi price data for ${result.commodity} yet.`}</Alert>
               )}
-            </button>
-          </form>
-        </div>
-
-        {/* Results & Guidelines */}
-        <div className="stack">
-          {result ? (
-            <div className="card card-pad stack" style={{ border: '2px solid var(--green-600)' }}>
-              <div className="row-center between">
-                <div>
-                  <span className="badge badge-good" style={{ fontSize: '1rem', padding: '4px 10px' }}>
-                    {result.grade}
-                  </span>
-                  <div className="tiny subtle" style={{ marginTop: 4 }}>
-                    {result.gradeLabel} (Confidence: {Math.round(result.confidence * 100)}%)
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--green-700)' }}>
-                    {result.qualityScore} / 100
-                  </div>
-                  <div className="tiny subtle">Quality Score</div>
-                </div>
-              </div>
-
-              {/* Mandi Price Range Card */}
-              <div style={{ background: 'var(--green-50)', padding: 16, borderRadius: 'var(--radius)', border: '1px solid var(--green-200)' }}>
-                <div className="row-center between" style={{ marginBottom: 6 }}>
-                  <div className="strong" style={{ color: 'var(--green-900)' }}>
-                    💰 Estimated Mandi Price Range ({result.priceEstimate?.market} Mandi):
-                  </div>
-                  <span className="tiny subtle">
-                    {new Date(result.priceEstimate?.marketDate).toLocaleDateString()}
-                  </span>
-                </div>
-
-                <div className="grid grid-2" style={{ textAlign: 'center', marginTop: 10 }}>
-                  <div className="card-pad" style={{ background: '#fff', borderRadius: 8 }}>
-                    <div className="tiny subtle">Price per Kilogram</div>
-                    <div style={{ fontSize: '1.7rem', fontWeight: 800, color: 'var(--green-800)' }}>
-                      ₹{result.priceEstimate?.estimatedMinPerKg} – ₹{result.priceEstimate?.estimatedMaxPerKg}
-                    </div>
-                    <div className="tiny subtle">₹ / kg</div>
-                  </div>
-
-                  <div className="card-pad" style={{ background: '#fff', borderRadius: 8 }}>
-                    <div className="tiny subtle">Wholesale Lot (1 Quintal = 100 kg)</div>
-                    <div style={{ fontSize: '1.7rem', fontWeight: 800, color: 'var(--green-800)' }}>
-                      ₹{result.priceEstimate?.estimatedMinPerQuintal} – ₹{result.priceEstimate?.estimatedMaxPerQuintal}
-                    </div>
-                    <div className="tiny subtle">₹ / quintal</div>
-                  </div>
-                </div>
-
-                <div className="tiny subtle" style={{ marginTop: 8 }}>
-                  Base Market Modal Rate: <strong>₹{result.priceEstimate?.baseModalPricePerQuintal} / quintal</strong> in {result.priceEstimate?.market} ({result.priceEstimate?.state}).
-                </div>
-              </div>
-
-              {/* Visual Metrics */}
-              <div>
-                <h3 style={{ marginBottom: 6 }}>Visual Inspection Metrics</h3>
-                <div className="grid grid-3" style={{ fontSize: '0.85rem' }}>
-                  <div className="card-pad" style={{ background: 'var(--surface-2)', borderRadius: 8 }}>
-                    <div className="tiny subtle">Uniformity</div>
-                    <strong>{result.metrics?.uniformity}%</strong>
-                  </div>
-                  <div className="card-pad" style={{ background: 'var(--surface-2)', borderRadius: 8 }}>
-                    <div className="tiny subtle">Surface Cleanliness</div>
-                    <strong>{result.metrics?.surfaceCleanliness}%</strong>
-                  </div>
-                  <div className="card-pad" style={{ background: 'var(--surface-2)', borderRadius: 8 }}>
-                    <div className="tiny subtle">Defect Area</div>
-                    <strong>{result.metrics?.defectAreaPercent}%</strong>
-                  </div>
-                </div>
-              </div>
-
-              {/* Advice */}
               {advice ? (
-                <div className="card-pad" style={{ background: 'var(--surface-2)', borderRadius: 8 }}>
-                  <div className="strong" style={{ marginBottom: 4 }}>Selling & Handling Advice:</div>
-                  <p className="tiny">{advice}</p>
+                <div>
+                  <h3>Selling advice</h3>
+                  <p className="small muted" style={{ marginTop: 4 }}>{advice}</p>
                 </div>
               ) : null}
-
-              {/* Disclaimer strictly adhering to SRS 5.2 */}
-              <div className="card-pad row-center gap-xs" style={{ background: 'var(--warn-bg)', borderRadius: 'var(--radius-sm)' }}>
-                <AlertCircle size={18} style={{ color: 'var(--warn)', flexShrink: 0 }} />
-                <div className="tiny">
-                  <strong>Notice (SRS 5.2):</strong> {result.disclaimer}
-                </div>
-              </div>
             </div>
-          ) : (
-            <div className="card card-pad stack">
-              <div className="row-center gap-xs">
-                <Info size={20} style={{ color: 'var(--green-700)' }} />
-                <h2>AGMARK Quality Grading Tiers</h2>
-              </div>
-              <div className="stack-xs tiny subtle">
-                <div>
-                  <strong style={{ color: 'var(--good)' }}>Grade A (Super / Premium):</strong>
-                  <p>Uniform size and shape, vibrant color, surface blemishes below 5%. Commands 5-18% premium over mandi modal rates.</p>
+
+            <div className="stack">
+              {result.qualityProbabilities ? (
+                <div className="stack-sm">
+                  <h3>What the model saw</h3>
+                  <ConfidenceBar label="Good (Grade A)" value={result.qualityProbabilities.good} />
+                  <ConfidenceBar label="Mixed (Grade B)" value={result.qualityProbabilities.mixed} />
+                  <ConfidenceBar label="Bad (Grade C)" value={result.qualityProbabilities.bad} />
                 </div>
-                <div>
-                  <strong style={{ color: 'var(--warn)' }}>Grade B (FAQ - Fair Average Quality):</strong>
-                  <p>Standard commercial lot with minor surface markings (5-15% area). Trades at prevailing mandi modal rates.</p>
+              ) : null}
+              {result.defectsDetected?.length ? (
+                <div className="stack-xs">
+                  <h3>Defects seen</h3>
+                  {result.defectsDetected.map((d) => (
+                    <div key={d.type + d.description} className="row-center gap-xs small">
+                      <AlertTriangle size={15} style={{ color: d.severity === 'severe' ? 'var(--bad)' : 'var(--warn)', flex: 'none' }} />
+                      <span>{d.description}</span>
+                    </div>
+                  ))}
                 </div>
-                <div>
-                  <strong style={{ color: 'var(--bad)' }}>Grade C (Undergrade / Processing):</strong>
-                  <p>Noticeable defects, irregular shape, or overripeness (&gt;15% area). Discounted 15-35%; recommended for local processing / juice / sauce pulp units.</p>
-                </div>
-              </div>
+              ) : result.method === 'basic' ? (
+                <p className="small muted">The basic check cannot see individual defects.</p>
+              ) : (
+                <p className="small muted">No defects were visible in the photo.</p>
+              )}
+              <p className="tiny faint">{m.text}</p>
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      {/* History */}
-      <div className="card card-pad stack">
-        <div className="row-center gap-xs">
-          <History size={18} style={{ color: 'var(--green-700)' }} />
-          <h2>Recent Graded Lots</h2>
-        </div>
+          <Alert tone="warn">{result.disclaimer}</Alert>
+        </section>
+      ) : null}
 
-        {loadingHistory ? (
-          <div className="subtle tiny">Loading history...</div>
-        ) : history.length === 0 ? (
-          <EmptyState title="No produce graded yet">Upload a photograph of your harvest above to obtain an AGMARK grade and mandi price band.</EmptyState>
-        ) : (
+      <section className="card card-pad stack">
+        <h2 className="row-center gap-xs">
+          <History size={18} /> Your graded lots
+        </h2>
+        {history.data?.items?.length ? (
           <div className="grid grid-3">
-            {history.map((item) => (
-              <div key={item.id} className="card-pad stack-xs" style={{ border: '1px solid var(--line)', borderRadius: 'var(--radius)' }}>
-                <div className="row-center between">
-                  <strong>{item.commodity}</strong>
-                  <span className="badge badge-good">{item.grade}</span>
+            {history.data.items.map((item) => (
+              <div key={item.id} className="card card-pad stack-xs" style={{ boxShadow: 'none' }}>
+                <div className="row between">
+                  <button type="button" className="btn btn-ghost btn-sm strong" style={{ paddingLeft: 0 }} onClick={() => setResult(item)}>
+                    {item.commodity}
+                  </button>
+                  <Button variant="ghost" className="btn-icon" aria-label={`Delete ${item.commodity} grading`} onClick={() => setRemoving(item)}>
+                    <Trash2 size={15} />
+                  </Button>
                 </div>
-                <div className="tiny subtle">
-                  {item.priceEstimate?.market} Mandi | Score: {item.qualityScore}
+                <img src={item.imageUrl} alt="" loading="lazy" style={{ height: 90, objectFit: 'cover', borderRadius: 8 }} />
+                <div className="row-center gap-xs wrap">
+                  <Badge tone={GRADE_TONE[item.grade]}>{item.grade}</Badge>
+                  <span className="tiny muted">{METHOD[item.method]?.label}</span>
                 </div>
-                <div className="strong" style={{ color: 'var(--green-800)' }}>
-                  ₹{item.priceEstimate?.estimatedMinPerKg} – ₹{item.priceEstimate?.estimatedMaxPerKg} / kg
+                <div className="tiny">
+                  {item.priceEstimate ? `₹${item.priceEstimate.estimatedMinPerKg}–${item.priceEstimate.estimatedMaxPerKg}/kg at ${item.priceEstimate.market}` : 'No price data'} · {formatDate(item.createdAt)}
                 </div>
-                <div className="tiny subtle">{new Date(item.createdAt).toLocaleDateString()}</div>
               </div>
             ))}
           </div>
+        ) : history.loading ? (
+          <p className="muted small">Loading…</p>
+        ) : (
+          <EmptyState icon={Scale} title="No lots graded yet">Grade your first lot above to see its grade and price band.</EmptyState>
         )}
-      </div>
+      </section>
+
+      {removing ? (
+        <ConfirmDialog title={`Delete this ${removing.commodity} grading?`} message="The grading and its photo will be removed." onConfirm={remove} onCancel={() => setRemoving(null)} />
+      ) : null}
     </div>
   );
 }

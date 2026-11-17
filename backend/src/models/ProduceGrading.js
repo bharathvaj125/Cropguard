@@ -25,6 +25,13 @@ const produceGradingSchema = new mongoose.Schema(
     gradeLabel: { type: String, default: 'Fair Average Quality' },
     confidence: { type: Number, required: true, min: 0, max: 1 },
     qualityScore: { type: Number, min: 0, max: 100 },
+    // How the grade was produced: the trained FruitNet model, Claude vision, or the basic
+    // colour check (weak, shown with low confidence).
+    method: { type: String, enum: ['model', 'claude', 'basic'], default: 'basic' },
+    detectedCommodity: { type: String, default: '' },
+    qualityProbabilities: { good: Number, mixed: Number, bad: Number },
+    warnings: [{ type: String }],
+    summary: { type: String, default: '' },
 
     image: {
       key: { type: String, required: true },
@@ -54,6 +61,8 @@ const produceGradingSchema = new mongoose.Schema(
       estimatedMaxPerKg: Number,
       unit: { type: String, default: 'Rs / quintal' },
       marketDate: { type: Date, default: Date.now },
+      marketNote: { type: String, default: '' },
+      sample: { type: Boolean, default: false },
     },
 
     disclaimer: {

@@ -1,16 +1,17 @@
-# CropGuard
+# CropGuard (Kisan Mitra AI)
 
-**AI-powered smart agriculture platform.** A farmer photographs a leaf; CropGuard identifies crop diseases
-and pests with deep-learning models, explains what it found and how to treat it, and puts weather advice
-and market price trends on the same dashboard. An admin panel lets agronomists manage users and farms,
-review AI reports and broadcast advisories.
+**AI-powered smart agriculture platform.** A farmer can ask questions by voice in their own language, photograph a
+leaf to find diseases and pests, read their Soil Health Card into an exact fertiliser plan, grade a lot of produce
+and see what it will fetch at the mandi, with weather advice and price trends on the same dashboard. An admin panel
+lets agronomists manage users and farms, review AI reports and broadcast advisories.
 
 | | |
 |---|---|
 | **Frontend** | React 19, React Router, Recharts, Vite |
 | **Backend** | Node.js 22, Express 5, MongoDB (Mongoose), JWT auth |
-| **AI / ML** | PyTorch (training) → ONNX Runtime (serving), FastAPI |
-| **Models** | MobileNetV3-Large fine-tuned on PlantVillage (38 classes) and IP102 (26 pest classes) |
+| **AI / ML** | PyTorch (training) → ONNX Runtime (serving), FastAPI; Claude (Amazon Bedrock or the Claude API) |
+| **Models** | MobileNetV3-Large fine-tuned on PlantVillage (38 classes), IP102 (26 pest classes) and FruitNet (18 fruit-quality classes) |
+| **Speech** | Amazon Transcribe and Amazon Polly, with browser speech as fallback |
 | **Weather** | Open-Meteo forecast and geocoding APIs |
 | **Market** | Agmarknet mandi prices via data.gov.in (bundled sample series without a key) |
 | **Deployment** | Docker Compose; AWS CloudFormation (EC2, S3, IAM, Secrets Manager, CloudFront) |
@@ -18,7 +19,7 @@ review AI reports and broadcast advisories.
 
 ## Features
 
-Each feature is mapped to the module in the client brief.
+Each feature is mapped to the module in the client brief and the Kisan Mitra SRS.
 
 | Module | What is built |
 |---|---|
@@ -30,9 +31,13 @@ Each feature is mapped to the module in the client brief.
 | 6. Farmer dashboard | Scan stats, 8-week crop-health chart, recent scans, upcoming field activities, weather and market cards, admin advisories; full scan history with filters; farm records; activity log (sowing, irrigation, spraying, harvest, with costs) |
 | 7. Admin dashboard | Platform statistics and charts; user management (search, activate/deactivate, promote, delete with data); farm management; AI report monitoring with expert review (confirm / correct, visible to the farmer); advisory broadcasting by state; audit log of sign-ins and admin actions; model accuracy and system health |
 
-**Track B (voice and AI advisory, branch `track-b-cloud-ai`):** Claude crop advice through Amazon Bedrock or the
-Claude API with structured output and missing-context questions, Amazon Polly voices (Hindi, English) and Amazon
-Transcribe speech recognition (10 Indian languages), all with offline fallbacks. See [docs/TRACK_B.md](docs/TRACK_B.md).
+| SRS 5.1 Voice assistant | Big microphone button, 8 Indian languages, text box fallback. Speech recognition by Amazon Transcribe (all 10 supported Indian languages) or the browser; answers read aloud by Amazon Polly (Hindi, English) or the browser voice |
+| SRS 5.2 Produce grading | Photo of a lot -> indicative AGMARK Grade A / B / C with defects and confidence, from a model trained on Indian fruit photos (FruitNet), Claude vision for other produce, or a clearly labelled basic check; price range per kg and per quintal from mandi data; mandatory "buyer inspection" disclaimer |
+| SRS 5.3 Soil Doctor | Photo or PDF of a Soil Health Card read by Claude vision; the farmer reviews every value; impossible or unreadable values are flagged, never guessed; Low / Medium / High ratings on the Soil Health Card scheme ranges; bags of Urea (45 kg), DAP (50 kg) and MOP (50 kg) with a split schedule; lime, gypsum and manure advice |
+| SRS 5.4 Crop advisory | Claude answers with sowing windows, irrigation, nutrient and protection advice in the farmer's language, using the farm's location, soil and irrigation and asking for missing details first; the offline crop almanac answers when Claude is not available |
+
+The voice, soil and produce modules were built with Lingesh R (soil, produce and almanac engines and their
+screens); the Claude, Polly and Transcribe integration is described in [docs/TRACK_B.md](docs/TRACK_B.md).
 
 Also included: a disease and pest reference library, responsive layout (phone to desktop), keyboard
 navigation and screen-reader labels, and honest "uncertain" results instead of forced guesses.
@@ -45,8 +50,10 @@ Measured once on held-out test images the models never saw during training or mo
 |---|---|---|---|---|---|
 | Disease (PlantVillage) | 38 | 10,709 | **99.1%** | 99.95% | 0.991 |
 | Pest (IP102, regrouped) | 26 | 20,343 | **82.2%** | 92.7% | 0.814 |
+| Produce quality (FruitNet) | 18 | 1,951 | **PRODUCE_ACC** | PRODUCE_TOP3 | PRODUCE_F1 |
 
-Temperature scaling cut the expected calibration error from 11.2% to 0.3% (disease) and 9.2% to 0.9% (pest), so a
+Temperature scaling cut the expected calibration error from 11.2% to 0.3% (disease), 9.2% to 0.9% (pest) and
+PRODUCE_ECE (produce), so a
 "90% confident" result is right about 90% of the time. See [docs/ML_MODEL.md](docs/ML_MODEL.md) for
 the training method, per-class results and **known limitations**. Accuracy on real field photos will
 be lower than these benchmark figures.
@@ -103,7 +110,7 @@ estimate: [docs/DEPLOYMENT_AWS.md](docs/DEPLOYMENT_AWS.md).
 ## Tests
 
 ```bash
-cd backend && npm test          # 65 API and unit tests (auth, access control, scans, market, admin, voice/AI)
+cd backend && npm test          # 105 API and unit tests (auth, access control, scans, market, admin, soil, produce, advisory, voice/AI)
 cd ml-service && pytest         # preprocessing and inference API tests
 cd frontend && npm run lint && npm run build
 ```

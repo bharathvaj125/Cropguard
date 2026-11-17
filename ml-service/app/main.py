@@ -76,7 +76,7 @@ def run_analysis(data: bytes, mode: str, explain: bool) -> dict:
 @app.post("/analyze")
 async def analyze(
     file: UploadFile = File(...),
-    mode: Literal["disease", "pest", "both"] = Form("both"),
+    mode: Literal["disease", "pest", "both", "produce"] = Form("both"),
     explain: bool = Form(False),
 ) -> dict:
     missing = [m for m in (["disease", "pest"] if mode == "both" else [mode]) if m not in models]

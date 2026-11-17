@@ -143,6 +143,72 @@ def cmd_pest(args: argparse.Namespace) -> None:
     write_manifest(rows, Path(args.out))
 
 
+def cmd_produce(args: argparse.Namespace) -> None:
+    """FruitNet (Indian fruits, Good / Mixed / Bad quality) -> labels "<Fruit>__<Quality>".
+
+    The dataset has no official split, so a seeded 80/10/10 split is made per class.
+    """
+    import pyarrow.parquet as pq
+
+    out_dir = Path(args.image_dir)
+    shards = sorted(Path(args.parquet_dir).glob("*.parquet"))
+    if not shards:
+        raise SystemExit(f"no parquet files in {args.parquet_dir}")
+
+    first = pq.ParquetFile(shards[0])
+    features = json.loads(first.schema_arrow.metadata[b"huggingface"])["info"]["features"]
+    label_cols = {k: v["names"] for k, v in features.items() if isinstance(v, dict) and "names" in v}
+    quality_col = next(k for k, names in label_cols.items() if set(names) >= {"Good", "Bad"})
+    fruit_col = next(k for k in label_cols if k != quality_col)
+    print(f"  quality column: {quality_col} {label_cols[quality_col]}")
+    print(f"  fruit column:   {fruit_col} {label_cols[fruit_col]}")
+
+    by_class: dict[str, list[str]] = defaultdict(list)
+    skipped = Counter()
+    idx = 0
+    for shard in shards:
+        pf = pq.ParquetFile(shard)
+        for batch in pf.iter_batches(batch_size=128, columns=["image", quality_col, fruit_col]):
+            for image, q, f in zip(batch.column("image").to_pylist(), batch.column(quality_col).to_pylist(),
+                                   batch.column(fruit_col).to_pylist()):
+                fruit = label_cols[fruit_col][f]
+                # FruitNet has lemon only as "Mixed" and lime only as "Good"/"Bad"; the two look
+                # alike in photos, so they are merged rather than letting the model learn
+                # "lemon means mixed quality".
+                fruit = "Lemon" if fruit in ("Lemon", "Lime") else fruit
+                label = f"{fruit}__{label_cols[quality_col][q]}"
+                dest = out_dir / label / f"{idx:06d}.jpg"
+                idx += 1
+                if not dest.exists():
+                    try:
+                        im = Image.open(io.BytesIO(image["bytes"])).convert("RGB")
+                    except Exception:
+                        skipped["unreadable image"] += 1
+                        continue
+                    w, h = im.size
+                    scale = 288 / min(w, h)
+                    if scale < 1:
+                        im = im.resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS)
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    im.save(dest, "JPEG", quality=90)
+                by_class[label].append(str(dest))
+        print(f"  {shard.name}: {idx} images so far")
+
+    rng = random.Random(SEED)
+    rows: list[tuple[str, str, str]] = []
+    for label, paths in sorted(by_class.items()):
+        paths.sort()
+        rng.shuffle(paths)
+        n_test = max(1, round(len(paths) * 0.1))
+        n_val = max(1, round(len(paths) * 0.1))
+        for i, p in enumerate(paths):
+            split = "test" if i < n_test else "val" if i < n_test + n_val else "train"
+            rows.append((p, label, split))
+    for reason, n in skipped.items():
+        print(f"  skipped {n}: {reason}")
+    write_manifest(rows, Path(args.out))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -164,6 +230,12 @@ def main() -> None:
     p.add_argument("--no-pest-train", type=int, default=1500)
     p.add_argument("--out", required=True)
     p.set_defaults(func=cmd_pest)
+
+    f = sub.add_parser("produce")
+    f.add_argument("--parquet-dir", required=True)
+    f.add_argument("--image-dir", required=True)
+    f.add_argument("--out", required=True)
+    f.set_defaults(func=cmd_produce)
 
     args = ap.parse_args()
     args.func(args)

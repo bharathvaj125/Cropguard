@@ -1,4 +1,4 @@
-import { Activity, Bug, ClipboardList, Cpu, Database, Microscope, ScanLine, Server, Sprout, Users } from 'lucide-react';
+import { Activity, Bug, ClipboardList, Cpu, Database, FlaskConical, Mic, Microscope, Scale, ScanLine, Server, Sprout, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ChartTip } from '../../components/charts.jsx';
@@ -48,8 +48,8 @@ function ModelCard({ model }) {
     <div className="card card-pad stack-sm" style={{ boxShadow: 'none' }}>
       <div className="row between">
         <h3 className="row" style={{ gap: 8 }}>
-          {model.name === 'disease' ? <Microscope size={17} /> : <Bug size={17} />}
-          {model.name === 'disease' ? 'Disease model' : 'Pest model'}
+          {model.name === 'disease' ? <Microscope size={17} /> : model.name === 'produce' ? <Scale size={17} /> : <Bug size={17} />}
+          {{ disease: 'Disease model', pest: 'Pest model', produce: 'Produce quality model' }[model.name] || model.name}
         </h3>
         <Badge tone="good">Loaded</Badge>
       </div>
@@ -102,6 +102,12 @@ export default function AdminOverview() {
           <StatCard icon={ClipboardList} tone={totals.pendingReviews ? 'warn' : undefined} label="Reports awaiting review" value={formatNumber(totals.pendingReviews)} hint="Non-healthy results not yet reviewed" />
         </div>
 
+        <div className="grid grid-3">
+          <StatCard icon={Mic} tone="info" label="Advisory questions" value={formatNumber(totals.advisoryQuestions)} hint={`${data.modules.advisoryBySource.claude || 0} answered by Claude · ${data.modules.advisoryBySource.rules || 0} by the almanac`} />
+          <StatCard icon={FlaskConical} label="Soil tests" value={formatNumber(totals.soilTests)} hint="Soil Health Cards analysed" />
+          <StatCard icon={Scale} tone="warn" label="Produce lots graded" value={formatNumber(totals.produceGradings)} hint={`${data.modules.gradingByMethod.model || 0} model · ${data.modules.gradingByMethod.claude || 0} Claude · ${data.modules.gradingByMethod.basic || 0} basic`} />
+        </div>
+
         <div className="grid grid-2">
           <Card title="Analyses per day (last 30 days)" icon={Activity}>
             <DailyChart data={daily} dataKey="scans" name="Analyses" color={SERIES[0]} />
@@ -126,7 +132,7 @@ export default function AdminOverview() {
         <Card title="AI models" icon={Cpu}>
           {system.ml.online && system.ml.models.length ? (
             <div className="stack">
-              <div className="grid grid-2">
+              <div className="grid grid-3">
                 {system.ml.models.map((m) => (
                   <ModelCard key={m.name} model={m} />
                 ))}
@@ -144,6 +150,10 @@ export default function AdminOverview() {
 
         <Card title="System" icon={Server}>
           <dl className="kv">
+            <dt>Claude</dt>
+            <dd>{system.llm?.enabled ? `${system.llm.model} via ${system.llm.provider === 'bedrock' ? 'Amazon Bedrock' : 'Claude API'}` : 'Not configured (offline rules and manual entry are used)'}</dd>
+            <dt>Voice</dt>
+            <dd>{`Polly ${system.speech?.polly ? 'on' : 'off'} · Transcribe ${system.speech?.transcribe ? 'on' : 'off'}`}</dd>
             <dt>AI service</dt>
             <dd><Badge tone={system.ml.online ? 'good' : 'bad'}>{system.ml.online ? 'Online' : 'Offline'}</Badge></dd>
             <dt>Average analysis time</dt>

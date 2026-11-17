@@ -142,6 +142,41 @@ weeklyTrendPct, outlook[7] `{ date, expected, low, high }`, action (`hold`, `sel
 | GET | `/dashboard` | Stats, weekly chart data, recent scans, upcoming activities, advisories, weather, market rows |
 | GET | `/knowledge` | `{ crops, diseases, pests }`: everything the models can recognise, with advice |
 
+## Advisory chat (voice assistant)
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| POST | `/advisory/ask` | `{ query, language, farmId?, context?: { location, soilType, season, irrigation, crop } }` | `{ id, title, body (markdown), voiceSummary, keyActions[], missingContextQuestions[], crop, topic, source: "claude" \| "rules", disclaimer }` |
+| GET | `/advisory/history` | | Paged past questions and answers |
+| GET | `/advisory/crops` | | Crop almanac: seasons, sowing windows, irrigation stages |
+| GET | `/advisory/languages` | | Supported languages |
+
+Claude answers when configured, with the farm's details and the last few turns (2 hours) as context; otherwise, or
+if Claude fails, the offline almanac rules answer. A farm that belongs to someone else is a 400.
+
+## Soil Doctor
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| POST | `/soil/extract` | multipart `image` (JPG, PNG, WebP or PDF) | `{ sampleId, values: { nitrogen…boron: number \| null }, unreadableFields[], rejected[], notes[], source: "claude" }`. 503 with `fallback: "manual"` when Claude is not configured; 422 when the document is not a soil report |
+| POST | `/soil/analyze` | multipart or JSON: `crop`, `farmAreaAcre`, `farmId?`, `sampleId?`, `notes?`, any of `nitrogen, phosphorus, potassium, ph, ec, organicCarbon, zinc, iron, sulphur, boron`, optional `image`, optional `ocrText` | 201 `{ soil: { parameters (value, unit, rating), unreadableFields, overallHealth, fertilizerPlan: { ureaBags, dapBags, mopBags, limeKg, gypsumKg, fymTonnes, schedule[] }, recommendations[], valueSource } }` |
+| GET | `/soil` | | Paged history |
+| GET / DELETE | `/soil/:id` | | One analysis / 204 |
+
+Values typed by the farmer must be physically possible (for example pH 2-11) or the request is a 400. Values read by
+Claude or parsed from text that are impossible are dropped and reported, never used.
+
+## Produce Grader
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/produce/methods` | | `{ model: { available, commodities }, claude: { available }, basic: { available } }` |
+| POST | `/produce/grade` | multipart `image`, `commodity`, `market?`, `variety?`, `farmId?`, `notes?` | 201 `{ produce: { grade, gradeLabel, confidence, qualityScore, method: "model" \| "claude" \| "basic", detectedCommodity, qualityProbabilities?, defectsDetected[], warnings[], priceEstimate \| null }, advice, priceUnavailable }`. 422 when Claude sees no produce |
+| GET | `/produce?commodity=&grade=` | | Paged history |
+| GET / DELETE | `/produce/:id` | | One grading / 204 |
+
+`priceEstimate` is `{ commodity, market, state, baseModalPricePerQuintal, estimatedMin/MaxPerQuintal, estimatedMin/MaxPerKg, marketDate, marketNote, sample }`, or `null` when there is no price data for the commodity.
+
 ## Voice and AI advisory (Track B)
 
 See [TRACK_B.md](TRACK_B.md) for setup. Every route needs sign-in; `tts`, `stt` and `llm` are rate-limited per user.

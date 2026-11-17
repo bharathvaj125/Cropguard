@@ -143,7 +143,7 @@ def render_heatmap(crop: Image.Image, heat: np.ndarray, size: int = 448) -> str:
 def load_models() -> dict[str, Classifier]:
     """Load every model folder that is present. A missing model is reported, not fatal."""
     models: dict[str, Classifier] = {}
-    for name in ("disease", "pest"):
+    for name in ("disease", "pest", "produce"):
         folder = MODELS_DIR / name
         if (folder / "model.onnx").is_file():
             models[name] = Classifier(name, folder)

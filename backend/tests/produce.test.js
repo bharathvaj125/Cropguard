@@ -44,7 +44,9 @@ describe('produce grading service: quality inspection & price linkage', () => {
     const inspection = await inspectProduceImage(sampleProduceImage);
 
     assert.ok(['Grade A', 'Grade B', 'Grade C'].includes(inspection.grade));
-    assert.ok(inspection.confidence >= 0.7 && inspection.confidence <= 1.0);
+    // The basic colour check is a weak signal and must say so through a low confidence.
+    assert.equal(inspection.method, 'basic');
+    assert.ok(inspection.confidence > 0 && inspection.confidence <= 0.4);
     assert.ok(inspection.qualityScore >= 0 && inspection.qualityScore <= 100);
     assert.ok(inspection.metrics.uniformity > 0);
     assert.ok(inspection.agronomicAdvice.length > 0);
@@ -127,8 +129,7 @@ describe('produce grading API endpoints', () => {
       .delete(`/api/produce/${createdGradingId}`)
       .set('Authorization', `Bearer ${farmerToken}`);
 
-    assert.equal(res.status, 200);
-    assert.equal(res.body.ok, true);
+    assert.equal(res.status, 204);
 
     const check = await ProduceGrading.findById(createdGradingId);
     assert.equal(check, null);

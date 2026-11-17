@@ -36,12 +36,16 @@ Language and format:
 - Write "body" and "voiceSummary" in the farmer's language, given as responseLanguage. Keep numbers as digits and keep product names such as Urea, DAP and MOP in their usual form.
 - "body" is markdown for the screen: short headings, bullet points, a small table for fertiliser doses when useful. Keep it under about 350 words.
 - "voiceSummary" is what will be read aloud: one or two plain sentences, no markdown, no symbols, no tables.
-- "missingContextQuestions" lists short questions, in the farmer's language, for any essential detail that is missing. Use an empty list when nothing essential is missing.`;
+- "missingContextQuestions" lists short questions, in the farmer's language, for any essential detail that is missing. Use an empty list when nothing essential is missing.
+- "title" is a short heading for the answer (crop and topic), in the farmer's language.
+- "keyActions" lists two to four short, concrete next steps, in the farmer's language.`;
 
 // The structured output Claude must return.
 export const AdvisorySchema = z.object({
+  title: z.string(),
   body: z.string(),
   voiceSummary: z.string(),
+  keyActions: z.array(z.string()),
   missingContextQuestions: z.array(z.string()),
 });
 
@@ -166,14 +170,14 @@ async function getClient() {
   return client;
 }
 
-function requestParams({ system, messages }) {
+function requestParams({ system, messages, schema, effort }) {
   const provider = llmProvider() || 'anthropic';
   const params = {
     model: llmModel() || config.llm.anthropicModel,
     max_tokens: 16000,
     system,
     messages,
-    output_config: { effort: config.llm.effort, format: zodOutputFormat(AdvisorySchema) },
+    output_config: { effort: effort || config.llm.effort, format: zodOutputFormat(schema) },
   };
   if (provider === 'anthropic' && config.llm.refusalFallback) {
     // Server-side fallback: if the model declines, the API re-runs the request on a
@@ -182,6 +186,50 @@ function requestParams({ system, messages }) {
     params.fallbacks = 'default';
   }
   return params;
+}
+
+/**
+ * One structured Claude call. Returns `{ data, model, usage }`, or null when Claude is not
+ * configured or the call fails, declines, is cut off or returns something unparseable.
+ * `label` is only used in log lines.
+ */
+export async function callClaudeStructured({ system, messages, schema, effort, label = 'claude' }) {
+  const client = await getClient();
+  if (!client) return null;
+
+  let response;
+  try {
+    response = await client.beta.messages.parse(requestParams({ system, messages, schema, effort }));
+  } catch (err) {
+    // Typed SDK errors: log enough to diagnose, never the prompt or the key.
+    const status = err instanceof Anthropic.APIError ? err.status : undefined;
+    console.error(`${label} failed (${status ?? err.name}): ${err.message}`);
+    return null;
+  }
+  if (response.stop_reason === 'refusal') {
+    console.warn(`${label} declined (${response.stop_details?.category ?? 'no category'})`);
+    return null;
+  }
+  if (response.stop_reason === 'max_tokens' || !response.parsed_output) {
+    console.warn(`${label} unusable (stop_reason=${response.stop_reason})`);
+    return null;
+  }
+  return {
+    data: response.parsed_output,
+    model: response.model,
+    usage: {
+      inputTokens: response.usage?.input_tokens ?? null,
+      outputTokens: response.usage?.output_tokens ?? null,
+    },
+  };
+}
+
+/** Image or PDF content block for a Claude message (base64: Bedrock has no URL sources). */
+export function fileBlock(buffer, mediaType) {
+  if (mediaType === 'application/pdf') {
+    return { type: 'document', source: { type: 'base64', media_type: mediaType, data: buffer.toString('base64') } };
+  }
+  return { type: 'image', source: { type: 'base64', media_type: mediaType, data: buffer.toString('base64') } };
 }
 
 // ---------------------------------------------------------------------------
@@ -197,8 +245,7 @@ function requestParams({ system, messages }) {
  * @returns {Promise<null | {body, voiceSummary, missingContextQuestions, language, source, model, usage}>}
  */
 export async function generateLlmAdvisory({ query, language, context = {}, history = [], now = new Date() }) {
-  const client = await getClient();
-  if (!client) return null;
+  if (!llmProvider() && !override) return null;
 
   const lang = normaliseLanguage(language) || 'en';
   // Earlier turns give Claude the answers to its own follow-up questions. Only the last few,
@@ -214,37 +261,20 @@ export async function generateLlmAdvisory({ query, language, context = {}, histo
     { role: 'user', content: buildUserMessage({ query, language: lang, context, now }) },
   ];
 
-  let response;
-  try {
-    response = await client.beta.messages.parse(requestParams({ system: SYSTEM_PROMPT, messages }));
-  } catch (err) {
-    // Typed SDK errors: log enough to diagnose, never the prompt or the key.
-    const status = err instanceof Anthropic.APIError ? err.status : undefined;
-    console.error(`claude advisory failed (${status ?? err.name}): ${err.message}`);
-    return null;
-  }
-
-  if (response.stop_reason === 'refusal') {
-    console.warn(`claude advisory declined (${response.stop_details?.category ?? 'no category'})`);
-    return null;
-  }
-  if (response.stop_reason === 'max_tokens' || !response.parsed_output) {
-    console.warn(`claude advisory unusable (stop_reason=${response.stop_reason})`);
-    return null;
-  }
-
-  const out = response.parsed_output;
+  const result = await callClaudeStructured({ system: SYSTEM_PROMPT, messages, schema: AdvisorySchema, label: 'claude advisory' });
+  if (!result) return null;
+  const out = result.data;
+  const clean = (list) => list.map((q) => q.trim()).filter(Boolean);
   return {
+    title: out.title.trim(),
     body: out.body.trim(),
     voiceSummary: out.voiceSummary.trim(),
-    missingContextQuestions: out.missingContextQuestions.map((q) => q.trim()).filter(Boolean),
+    keyActions: clean(out.keyActions),
+    missingContextQuestions: clean(out.missingContextQuestions),
     language: lang,
     source: 'claude',
-    model: response.model,
-    usage: {
-      inputTokens: response.usage?.input_tokens ?? null,
-      outputTokens: response.usage?.output_tokens ?? null,
-    },
+    model: result.model,
+    usage: result.usage,
   };
 }
 

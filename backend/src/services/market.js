@@ -54,16 +54,20 @@ export function samplePrice(commodity, market, date) {
  * has been switched off for a month does not show stale charts. Returns rows added.
  */
 export async function ensureSampleData(today = utcMidnight()) {
-  const latest = await MarketPrice.findOne({ source: 'sample' }).sort({ date: -1 }).select('date');
+  // Per commodity, so a commodity added to the catalogue later gets its full history too.
+  const latestRows = await MarketPrice.aggregate([
+    { $match: { source: 'sample' } },
+    { $group: { _id: '$commodity', latest: { $max: '$date' } } },
+  ]);
+  const latestBy = new Map(latestRows.map((r) => [r._id, r.latest]));
   const earliest = new Date(today.getTime() - (SAMPLE_HISTORY_DAYS - 1) * DAY_MS);
-  let start = earliest;
-  if (latest) start = new Date(Math.max(earliest.getTime(), latest.date.getTime() + DAY_MS));
-  if (start > today) return 0;
 
   const docs = [];
-  for (let t = start.getTime(); t <= today.getTime(); t += DAY_MS) {
-    const date = new Date(t);
-    for (const commodity of COMMODITIES) {
+  for (const commodity of COMMODITIES) {
+    const latest = latestBy.get(commodity.name);
+    const start = latest ? Math.max(earliest.getTime(), latest.getTime() + DAY_MS) : earliest.getTime();
+    for (let t = start; t <= today.getTime(); t += DAY_MS) {
+      const date = new Date(t);
       for (const market of MARKETS) {
         docs.push({
           commodity: commodity.name,
@@ -77,6 +81,7 @@ export async function ensureSampleData(today = utcMidnight()) {
       }
     }
   }
+  if (!docs.length) return 0;
   try {
     await MarketPrice.insertMany(docs, { ordered: false });
   } catch (err) {

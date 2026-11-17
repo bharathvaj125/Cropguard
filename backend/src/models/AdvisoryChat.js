@@ -17,7 +17,12 @@ const advisoryChatSchema = new mongoose.Schema(
       missingContextQuestions: [{ type: String }],
     },
 
+    // Which engine answered: Claude, or the offline almanac rules.
+    source: { type: String, enum: ['claude', 'rules'], default: 'rules' },
+    model: { type: String, default: '' },
+
     contextProvided: {
+      crop: { type: String, default: '' },
       location: { type: String, default: '' },
       soilType: { type: String, default: '' },
       season: { type: String, default: '' },

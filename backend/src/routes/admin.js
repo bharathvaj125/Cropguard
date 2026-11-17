@@ -5,12 +5,16 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { Activity } from '../models/Activity.js';
 import { Advisory } from '../models/Advisory.js';
 import { Analysis } from '../models/Analysis.js';
+import { AdvisoryChat } from '../models/AdvisoryChat.js';
 import { AuditLog } from '../models/AuditLog.js';
 import { Farm } from '../models/Farm.js';
 import { MarketPrice } from '../models/MarketPrice.js';
+import { ProduceGrading } from '../models/ProduceGrading.js';
+import { SoilAnalysis } from '../models/SoilAnalysis.js';
 import { User } from '../models/User.js';
 import { audit } from '../services/audit.js';
 import { syncAgmarknet, utcMidnight } from '../services/market.js';
+import { llmStatus } from '../services/claudeAdvisor.js';
 import { mlStatus } from '../services/mlClient.js';
 import { storage } from '../services/storage.js';
 import { ApiError } from '../utils/errors.js';
@@ -74,6 +78,16 @@ router.get('/stats', async (_req, res) => {
       mlStatus(),
     ]);
 
+  // Track A / Track B modules.
+  const [soilTests, produceGradings, advisoryBySource, gradesByMethod] = await Promise.all([
+    SoilAnalysis.countDocuments(),
+    ProduceGrading.countDocuments(),
+    AdvisoryChat.aggregate([{ $group: { _id: '$source', n: { $sum: 1 } } }]),
+    ProduceGrading.aggregate([{ $group: { _id: '$method', n: { $sum: 1 } } }]),
+  ]);
+  const advisory = Object.fromEntries(advisoryBySource.map((r) => [r._id || 'rules', r.n]));
+  const grading = Object.fromEntries(gradesByMethod.map((r) => [r._id || 'basic', r.n]));
+
   // Fill every day of the last 30 so the chart has no gaps.
   const scans = new Map(scansByDay.map((d) => [d._id, d.scans]));
   const signups = new Map(signupsByDay.map((d) => [d._id, d.signups]));
@@ -94,7 +108,11 @@ router.get('/stats', async (_req, res) => {
       analyses30,
       pendingReviews,
       activities,
+      soilTests,
+      produceGradings,
+      advisoryQuestions: Object.values(advisory).reduce((a, b) => a + b, 0),
     },
+    modules: { advisoryBySource: advisory, gradingByMethod: grading },
     outcomes: Object.fromEntries(outcomes.map((o) => [o._id, o.count])),
     topDiseases: topDiseases.map((d) => ({ name: `${d._id.crop}: ${d._id.name}`, count: d.count })),
     topPests: topPests.map((p) => ({ name: p._id, count: p.count })),
@@ -108,6 +126,8 @@ router.get('/stats', async (_req, res) => {
       ml,
       storage: await storage.driverName(),
       marketSource: config.dataGovApiKey ? 'agmarknet' : 'sample',
+      llm: llmStatus(),
+      speech: { polly: config.speech.pollyEnabled, transcribe: config.speech.transcribeEnabled },
       thresholds: config.thresholds,
     },
   });

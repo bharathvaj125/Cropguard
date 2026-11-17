@@ -1,205 +1,201 @@
-import {
-  Check,
-  HelpCircle,
-  Languages,
-  Loader2,
-  Mic,
-  MicOff,
-  Send,
-  Sparkles,
-  Volume2,
-  VolumeX,
-} from 'lucide-react';
+import { Bot, BookOpen, Check, HelpCircle, Languages, Loader2, Mic, Send, Sparkles, Square, Volume2, VolumeX } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { Alert } from '../components/ui.jsx';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Alert, Badge } from '../components/ui.jsx';
 import { api } from '../lib/api.js';
+import { getCloudStatus, speak, startRecording, stopSpeaking, transcribe } from '../lib/cloudVoice.js';
+import { formatDateTime } from '../lib/format.js';
+import { useApi } from '../lib/useApi.js';
 
 const QUICK_PROMPTS = [
-  'When is the optimal sowing window for wheat in Punjab?',
+  'When is the best sowing window for wheat in Punjab?',
   'What is the critical irrigation schedule for paddy?',
-  'How much Urea and DAP fertilizer for 2 acres of tomato?',
-  'Preventive pest management for cotton pink bollworm',
-  'When should I harvest maize and how to check moisture?',
+  'How much Urea and DAP for 2 acres of tomato?',
+  'How do I manage pink bollworm in cotton?',
+  'When should I harvest maize and how do I check moisture?',
 ];
 
+const LOCALES = { en: 'en-IN', hi: 'hi-IN', ta: 'ta-IN', te: 'te-IN', kn: 'kn-IN', mr: 'mr-IN', bn: 'bn-IN', pa: 'pa-IN' };
+const BrowserRecognition = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
+
+/** How the microphone works on this device: cloud (Amazon Transcribe), browser, or not at all. */
+function micMode(status) {
+  const cloud = status?.stt?.enabled && typeof MediaRecorder !== 'undefined' && navigator.mediaDevices?.getUserMedia;
+  if (cloud) return 'cloud';
+  if (BrowserRecognition) return 'browser';
+  return 'none';
+}
+
 export default function VoiceAssistant() {
+  const languages = useApi('/advisory/languages');
+  const farms = useApi('/farms');
+  const [cloud, setCloud] = useState(null);
   const [query, setQuery] = useState('');
   const [language, setLanguage] = useState('en');
-  const [languages, setLanguages] = useState([]);
-  const [locationContext, setLocationContext] = useState('');
-  const [irrigationContext, setIrrigationContext] = useState('');
+  const [farmId, setFarmId] = useState('');
+  const [location, setLocation] = useState('');
+  const [irrigation, setIrrigation] = useState('');
 
-  const [isListening, setIsListening] = useState(false);
-  const [speechSupported, setSpeechSupported] = useState(true);
+  const [listening, setListening] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [speakingId, setSpeakingId] = useState(null);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [conversation, setConversation] = useState([]);
 
+  const recorderRef = useRef(null);
   const recognitionRef = useRef(null);
-  const sendQueryRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
-    // Load supported languages
-    api.get('/advisory/languages')
-      .then((res) => setLanguages(res.languages || []))
+    getCloudStatus().then(setCloud);
+    api
+      .get('/advisory/history')
+      .then((res) => setConversation(res.items || []))
       .catch(() => {});
-
-    // Load past conversations
-    api.get('/advisory/history')
-      .then((res) => {
-        if (res.items?.length) {
-          setConversation(res.items);
-        }
-      })
-      .catch(() => {});
-
-    // Setup Web Speech API for voice recording
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-
-      recognition.onstart = () => setIsListening(true);
-      recognition.onend = () => setIsListening(false);
-      recognition.onerror = () => {
-        setIsListening(false);
-        setError('Microphone audio was unclear or permission was denied. You can type your query in the box below.');
-      };
-
-      recognition.onresult = (event) => {
-        const transcript = event.results[0]?.[0]?.transcript;
-        if (transcript) {
-          setQuery(transcript);
-          // Auto submit query
-          sendQueryRef.current?.(transcript);
-        }
-      };
-
-      recognitionRef.current = recognition;
-    } else {
-      setSpeechSupported(false);
-    }
-
     return () => {
-      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      stopSpeaking();
+      recorderRef.current?.cancel();
+      recognitionRef.current?.abort?.();
     };
   }, []);
 
-  const toggleListening = () => {
-    if (!speechSupported) {
-      setError('Voice recognition is not supported in this browser. Please use the text input below.');
-      return;
-    }
+  const mode = micMode(cloud);
 
-    if (isListening) {
-      recognitionRef.current?.stop();
-    } else {
-      setError('');
-      try {
-        const selLang = languages.find((l) => l.code === language);
-        if (recognitionRef.current && selLang) {
-          recognitionRef.current.lang = selLang.ttsLang || 'en-IN';
-        }
-        recognitionRef.current?.start();
-      } catch {
-        recognitionRef.current?.stop();
-      }
-    }
-  };
-
-  const handleSpeak = (text, id) => {
-    if (!window.speechSynthesis) {
-      setError('Text-to-speech audio playback is not supported on this device.');
-      return;
-    }
-
-    if (speakingId === id) {
-      window.speechSynthesis.cancel();
-      setSpeakingId(null);
-      return;
-    }
-
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    const selLang = languages.find((l) => l.code === language);
-    if (selLang) utterance.lang = selLang.ttsLang;
-    utterance.rate = 0.95; // comfortable cadence for farmers
-
-    utterance.onend = () => setSpeakingId(null);
-    utterance.onerror = () => setSpeakingId(null);
-
-    setSpeakingId(id);
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const handleSendQuery = async (userQuery) => {
-    const q = userQuery || query;
-    if (!q.trim()) return;
-
+  async function ask(text) {
+    const q = (text ?? query).trim();
+    if (q.length < 2) return;
+    setLoading(true);
+    setError('');
     try {
-      setLoading(true);
-      setError('');
-
       const res = await api.post('/advisory/ask', {
         query: q,
         language,
-        context: {
-          location: locationContext,
-          irrigation: irrigationContext,
-        },
+        farmId: farmId || undefined,
+        context: { location, irrigation },
       });
-
       setConversation((prev) => [res, ...prev]);
       setQuery('');
-
-      // Auto-play voice response if voice-initiated
-      if (res.voiceSummary) {
-        handleSpeak(res.voiceSummary, res.id);
-      }
+      if (res.voiceSummary) playAnswer(res);
     } catch (err) {
-      setError(err.message || 'Failed to process voice query');
+      setError(err.message || 'Could not get an answer. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  useEffect(() => {
-    sendQueryRef.current = handleSendQuery;
-  });
+  async function playAnswer(item) {
+    if (speakingId === item.id) {
+      stopSpeaking();
+      setSpeakingId(null);
+      return;
+    }
+    setSpeakingId(item.id);
+    try {
+      await speak(item.voiceSummary || item.body, item.language || language);
+    } finally {
+      setSpeakingId((current) => (current === item.id ? null : current));
+    }
+  }
+
+  // --- microphone -----------------------------------------------------------
+
+  async function startCloud() {
+    try {
+      recorderRef.current = await startRecording();
+      setListening(true);
+    } catch {
+      setError('Microphone permission was denied. Allow the microphone, or type your question below.');
+    }
+  }
+
+  async function stopCloud() {
+    const rec = recorderRef.current;
+    recorderRef.current = null;
+    setListening(false);
+    if (!rec) return;
+    setTranscribing(true);
+    try {
+      const blob = await rec.stop();
+      const { transcript } = await transcribe(blob, language);
+      setQuery(transcript);
+      await ask(transcript);
+    } catch (err) {
+      setError(err.message || 'We could not understand the recording. Please try again or type your question.');
+      inputRef.current?.focus();
+    } finally {
+      setTranscribing(false);
+    }
+  }
+
+  function startBrowser() {
+    const recognition = new BrowserRecognition();
+    recognition.lang = LOCALES[language] || 'en-IN';
+    recognition.interimResults = false;
+    recognition.onend = () => setListening(false);
+    recognition.onerror = () => {
+      setListening(false);
+      setError('The microphone audio was unclear or permission was denied. You can type your question below.');
+    };
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript;
+      if (transcript) {
+        setQuery(transcript);
+        ask(transcript);
+      }
+    };
+    recognitionRef.current = recognition;
+    setListening(true);
+    recognition.start();
+  }
+
+  function toggleMic() {
+    setError('');
+    stopSpeaking();
+    if (mode === 'none') {
+      setError('Voice input is not supported in this browser. Please type your question below.');
+      inputRef.current?.focus();
+      return;
+    }
+    if (listening) {
+      if (mode === 'cloud') stopCloud();
+      else recognitionRef.current?.stop();
+    } else if (mode === 'cloud') {
+      startCloud();
+    } else {
+      startBrowser();
+    }
+  }
+
+  const busy = loading || transcribing;
+  const status = transcribing
+    ? 'Understanding your voice…'
+    : loading
+      ? 'Preparing your answer…'
+      : listening
+        ? mode === 'cloud'
+          ? 'Listening… tap again when you finish speaking'
+          : 'Listening… speak your question now'
+        : 'Tap the microphone to ask by voice';
 
   return (
     <div className="stack-lg">
-      <div className="page-head">
+      <header className="page-head">
         <div>
-          <div className="row-center gap-xs" style={{ color: 'var(--green-700)', fontWeight: 600, fontSize: '0.9rem' }}>
-            <Mic size={18} />
-            Voice-First Multilingual Agricultural Assistant (SRS 5.1 & 5.4)
-          </div>
-          <h1 style={{ marginTop: 4 }}>Kisan Mitra Voice Advisor</h1>
-          <p className="subtle" style={{ maxWidth: 720 }}>
-            Speak or type agricultural questions in your preferred Indian language. Receive real-time cultivation advice, sowing schedules, irrigation alerts, and fertilizer calculations with spoken audio playback.
-          </p>
+          <h1>Kisan Mitra voice advisor</h1>
+          <p>Ask farming questions by voice or text in your language. Answers come with spoken summaries.</p>
         </div>
-      </div>
+      </header>
 
-      {error ? <Alert tone="bad" title="Voice Error">{error}</Alert> : null}
+      {error ? <Alert tone="bad">{error}</Alert> : null}
 
-      {/* Main Voice Center Card */}
-      <div className="card card-pad stack align-center" style={{ textAlign: 'center', padding: '36px 20px', background: 'linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%)' }}>
-        {/* Language Selector */}
-        <div className="row-center gap-sm" style={{ marginBottom: 12 }}>
+      <section className="card card-pad stack align-center text-center" style={{ padding: '32px 20px' }}>
+        <div className="row-center gap-sm wrap justify-center">
           <Languages size={18} style={{ color: 'var(--green-700)' }} />
-          <span className="tiny strong">Choose Language:</span>
-          <select
-            className="select"
-            style={{ width: 'auto', padding: '4px 10px', fontSize: '0.9rem' }}
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-          >
-            {languages.map((l) => (
+          <label className="tiny strong" htmlFor="va-language">Language</label>
+          <select id="va-language" className="select" style={{ width: 'auto' }} value={language} onChange={(e) => setLanguage(e.target.value)}>
+            {(languages.data?.languages || [{ code: 'en', name: 'English', nativeName: 'English' }]).map((l) => (
               <option key={l.code} value={l.code}>
                 {l.nativeName} ({l.name})
               </option>
@@ -207,187 +203,181 @@ export default function VoiceAssistant() {
           </select>
         </div>
 
-        {/* Big Mic Button */}
-        <div style={{ position: 'relative', margin: '14px auto' }}>
-          <button
-            type="button"
-            className="btn btn-icon"
-            onClick={toggleListening}
-            style={{
-              width: 84,
-              height: 84,
-              borderRadius: '50%',
-              background: isListening ? 'var(--bad)' : 'var(--green-600)',
-              color: '#fff',
-              boxShadow: isListening
-                ? '0 0 0 12px rgba(220, 38, 38, 0.25), 0 0 0 24px rgba(220, 38, 38, 0.12)'
-                : '0 8px 24px rgba(22, 163, 74, 0.35)',
-              transition: 'all 0.3s ease',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            title={isListening ? 'Click to stop listening' : 'Click to speak'}
-          >
-            {isListening ? <MicOff size={38} /> : <Mic size={38} />}
-          </button>
+        <button
+          type="button"
+          className={`mic-btn${listening ? ' recording' : ''}`}
+          style={{ margin: '18px auto 6px' }}
+          onClick={toggleMic}
+          disabled={busy}
+          aria-label={listening ? 'Stop recording' : 'Start voice question'}
+          aria-pressed={listening}
+        >
+          {busy ? <Loader2 size={34} className="spin" /> : listening ? <Square size={30} /> : <Mic size={36} />}
+        </button>
+        <div className="strong" aria-live="polite" style={{ color: listening ? 'var(--bad)' : 'var(--ink)' }}>
+          {status}
+        </div>
+        <div className="tiny faint">
+          {mode === 'cloud'
+            ? 'Speech recognition by Amazon Transcribe'
+            : mode === 'browser'
+              ? 'Speech recognition by your browser'
+              : 'Voice input is not available in this browser'}
+          {cloud?.llm?.enabled ? ' · Answers by Claude AI with an offline backup' : ' · Answers from the offline crop almanac'}
         </div>
 
-        <div className="strong" style={{ fontSize: '1.05rem', color: isListening ? 'var(--bad)' : 'var(--ink)' }}>
-          {isListening ? 'Listening... Speak your agricultural question now' : 'Tap the microphone to ask by voice'}
-        </div>
-        <div className="tiny subtle" style={{ marginTop: 2 }}>
-          Supported across Indian languages: Hindi, Tamil, Telugu, Kannada, Bengali, Marathi, Punjabi, English.
-        </div>
-
-        {/* Text Input Fallback (SRS 5.1 Mandate) */}
-        <div style={{ width: '100%', maxWidth: 640, marginTop: 20 }}>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSendQuery();
-            }}
-            className="row-center gap-xs"
-          >
-            <input
-              type="text"
-              className="input"
-              placeholder="Or type your farming question here..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              disabled={loading}
-            />
-            <button type="submit" className="btn btn-primary" disabled={loading || !query.trim()}>
-              {loading ? <Loader2 size={18} className="spin" /> : <Send size={18} />}
-            </button>
-          </form>
-        </div>
-
-        {/* Context Strip */}
-        <div className="row-center gap-sm wrap justify-center" style={{ marginTop: 14 }}>
-          <span className="tiny subtle">Active Context:</span>
+        <form
+          className="row-center gap-xs"
+          style={{ width: '100%', maxWidth: 640, marginTop: 18 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            ask();
+          }}
+        >
           <input
-            type="text"
+            ref={inputRef}
             className="input"
-            style={{ width: 'auto', padding: '3px 8px', fontSize: '0.8rem' }}
-            placeholder="Farm State / District"
-            value={locationContext}
-            onChange={(e) => setLocationContext(e.target.value)}
+            placeholder="Or type your farming question here…"
+            aria-label="Your question"
+            value={query}
+            maxLength={1000}
+            onChange={(e) => setQuery(e.target.value)}
+            disabled={busy}
           />
-          <select
-            className="select"
-            style={{ width: 'auto', padding: '3px 8px', fontSize: '0.8rem' }}
-            value={irrigationContext}
-            onChange={(e) => setIrrigationContext(e.target.value)}
-          >
-            <option value="">Irrigation: Any</option>
-            <option value="Borewell">Borewell</option>
-            <option value="Canal">Canal</option>
-            <option value="Drip">Drip Irrigation</option>
-            <option value="Rainfed">Rainfed / Dryland</option>
-          </select>
+          <button type="submit" className="btn" disabled={busy || query.trim().length < 2} aria-label="Ask">
+            {loading ? <Loader2 size={18} className="spin" /> : <Send size={18} />}
+          </button>
+        </form>
+
+        <div className="row-center gap-sm wrap justify-center" style={{ marginTop: 6 }}>
+          <span className="tiny subtle">Your farm:</span>
+          {farms.data?.farms?.length ? (
+            <select className="select" style={{ width: 'auto', padding: '4px 8px', fontSize: '0.84rem' }} aria-label="Farm" value={farmId} onChange={(e) => setFarmId(e.target.value)}>
+              <option value="">No farm selected</option>
+              {farms.data.farms.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {!farmId ? (
+            <>
+              <input
+                className="input"
+                style={{ width: 180, padding: '4px 8px', fontSize: '0.84rem' }}
+                placeholder="State or district"
+                aria-label="State or district"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+              />
+              <select className="select" style={{ width: 'auto', padding: '4px 8px', fontSize: '0.84rem' }} aria-label="Irrigation" value={irrigation} onChange={(e) => setIrrigation(e.target.value)}>
+                <option value="">Irrigation: not set</option>
+                <option value="Borewell">Borewell</option>
+                <option value="Canal">Canal</option>
+                <option value="Drip">Drip</option>
+                <option value="Rainfed">Rainfed</option>
+              </select>
+            </>
+          ) : (
+            <span className="tiny faint">Location, soil and irrigation are taken from the farm.</span>
+          )}
         </div>
 
-        {/* Quick Prompts */}
-        <div className="row-center gap-xs wrap justify-center" style={{ marginTop: 16 }}>
-          {QUICK_PROMPTS.map((p, i) => (
-            <button
-              key={i}
-              type="button"
-              className="btn btn-ghost btn-sm"
-              style={{ fontSize: '0.8rem', background: 'var(--surface-2)', border: '1px solid var(--line)' }}
-              onClick={() => handleSendQuery(p)}
-            >
+        <div className="row-center gap-xs wrap justify-center" style={{ marginTop: 14 }}>
+          {QUICK_PROMPTS.map((p) => (
+            <button key={p} type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => ask(p)}>
               <Sparkles size={13} style={{ color: 'var(--green-700)' }} />
               {p}
             </button>
           ))}
         </div>
-      </div>
+      </section>
 
-      {/* Answers Stream */}
-      <div className="stack">
-        <h2>Advisory Conversation</h2>
+      <section className="stack">
+        <h2>Conversation</h2>
         {conversation.length === 0 ? (
-          <div className="card card-pad subtle tiny text-center">
-            No questions asked yet. Speak through the microphone or type above to receive personalized crop guidance.
-          </div>
+          <div className="card card-pad subtle text-center">No questions yet. Speak or type above to get crop guidance.</div>
         ) : (
           conversation.map((item) => (
-            <div key={item.id} className="card card-pad stack" style={{ borderLeft: '4px solid var(--green-600)' }}>
-              {/* Question */}
-              <div className="row-center between">
-                <div className="row-center gap-xs">
-                  <span className="badge badge-good" style={{ textTransform: 'capitalize' }}>
-                    {item.crop || 'Farming'} • {item.topic}
-                  </span>
+            <article key={item.id} className="card card-pad stack" style={{ borderLeft: `4px solid ${item.source === 'claude' ? 'var(--info)' : 'var(--green-600)'}` }}>
+              <div className="row between wrap" style={{ alignItems: 'flex-start' }}>
+                <div className="stack-xs grow">
+                  <div className="row-center gap-xs wrap">
+                    {item.source === 'claude' ? (
+                      <Badge tone="info" icon={Bot}>Claude AI</Badge>
+                    ) : (
+                      <Badge icon={BookOpen}>Offline almanac</Badge>
+                    )}
+                    {item.crop && item.crop !== 'general' ? <Badge tone="good">{item.crop} · {item.topic}</Badge> : null}
+                    <span className="tiny faint">{formatDateTime(item.createdAt)}</span>
+                  </div>
                   <strong>{item.query}</strong>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => handleSpeak(item.voiceSummary || item.body, item.id)}
-                  title="Listen to spoken audio"
-                >
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => playAnswer(item)} aria-label={speakingId === item.id ? 'Stop audio' : 'Listen to the answer'}>
                   {speakingId === item.id ? <VolumeX size={18} style={{ color: 'var(--bad)' }} /> : <Volume2 size={18} style={{ color: 'var(--green-700)' }} />}
-                  <span className="tiny">{speakingId === item.id ? 'Stop Audio' : 'Listen'}</span>
+                  <span className="tiny">{speakingId === item.id ? 'Stop' : 'Listen'}</span>
                 </button>
               </div>
 
-              {/* Voice Summary Banner */}
+              {item.title ? <h3>{item.title}</h3> : null}
+
               {item.voiceSummary ? (
                 <div style={{ background: 'var(--green-50)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--green-200)' }}>
-                  <div className="tiny strong" style={{ color: 'var(--green-900)' }}>
-                    🔊 Spoken Summary ({item.language?.toUpperCase()}):
-                  </div>
-                  <div className="tiny" style={{ marginTop: 2, color: 'var(--green-950)' }}>
-                    {item.voiceSummary}
-                  </div>
+                  <div className="tiny strong" style={{ color: 'var(--green-900)' }}>In short</div>
+                  <div style={{ marginTop: 2 }}>{item.voiceSummary}</div>
                 </div>
               ) : null}
 
-              {/* Detailed Markdown Body */}
-              <div style={{ whiteSpace: 'pre-line', fontSize: '0.92rem', lineHeight: 1.6 }}>
-                {item.body}
+              <div className="markdown" style={{ fontSize: '0.94rem', lineHeight: 1.6 }}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.body}</ReactMarkdown>
               </div>
 
-              {/* Missing Context Prompts (SRS 5.4) */}
-              {item.missingContextQuestions?.length > 0 ? (
-                <div className="card-pad row-center gap-xs" style={{ background: 'var(--warn-bg)', borderRadius: 'var(--radius-sm)' }}>
-                  <HelpCircle size={18} style={{ color: 'var(--warn)', flexShrink: 0 }} />
-                  <div className="tiny">
-                    <strong>Additional Context Needed (SRS 5.4):</strong>
-                    <ul className="list-styled" style={{ marginTop: 4, paddingLeft: 16 }}>
-                      {item.missingContextQuestions.map((q, idx) => (
-                        <li key={idx}>{q}</li>
-                      ))}
-                    </ul>
+              {item.missingContextQuestions?.length ? (
+                <div className="alert warn">
+                  <HelpCircle size={18} />
+                  <div className="stack-xs">
+                    <div className="alert-title">To give exact advice, please tell me:</div>
+                    {item.missingContextQuestions.map((q) => (
+                      <button
+                        key={q}
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        style={{ justifyContent: 'flex-start', whiteSpace: 'normal', textAlign: 'left' }}
+                        onClick={() => {
+                          setQuery('');
+                          inputRef.current?.focus();
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                      >
+                        • {q}
+                      </button>
+                    ))}
                   </div>
                 </div>
               ) : null}
 
-              {/* Key Action Checkpoints */}
-              {item.keyActions?.length > 0 ? (
+              {item.keyActions?.length ? (
                 <div className="stack-xs">
-                  <div className="tiny strong subtle">Key Action Steps:</div>
+                  <div className="tiny strong subtle">Next steps</div>
                   <div className="row-center gap-xs wrap">
-                    {item.keyActions.map((act, idx) => (
-                      <span key={idx} className="badge badge-ghost" style={{ fontSize: '0.8rem' }}>
-                        <Check size={12} style={{ color: 'var(--green-700)', marginRight: 4 }} />
-                        {act}
+                    {item.keyActions.map((a) => (
+                      <span key={a} className="badge badge-ghost">
+                        <Check size={12} style={{ color: 'var(--green-700)' }} /> {a}
                       </span>
                     ))}
                   </div>
                 </div>
               ) : null}
 
-              <div className="tiny subtle" style={{ borderTop: '1px solid var(--line)', paddingTop: 8 }}>
-                {item.disclaimer}
+              <div className="tiny faint" style={{ borderTop: '1px solid var(--line)', paddingTop: 8 }}>
+                {item.disclaimer ||
+                  'Guidance is based on standard packages of practices. Confirm pesticide and disease decisions with your Krishi Vigyan Kendra or extension officer.'}
               </div>
-            </div>
+            </article>
           ))
         )}
-      </div>
+      </section>
     </div>
   );
 }

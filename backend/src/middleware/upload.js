@@ -45,3 +45,16 @@ export async function normaliseImage(file) {
 
   return { buffer: data, width: info.width, height: info.height, bytes: data.length };
 }
+
+/**
+ * Like normaliseImage, but also accepts PDF documents (Soil Health Cards are often PDFs).
+ * PDFs are recognised by their magic bytes and passed through unchanged.
+ * @returns {Promise<{buffer, mediaType: 'image/jpeg'|'application/pdf', ext: 'jpg'|'pdf', width?, height?, bytes}>}
+ */
+export async function normaliseDocument(file) {
+  if (file?.buffer?.subarray(0, 5).toString('latin1') === '%PDF-') {
+    return { buffer: file.buffer, mediaType: 'application/pdf', ext: 'pdf', bytes: file.buffer.length };
+  }
+  const image = await normaliseImage(file);
+  return { ...image, mediaType: 'image/jpeg', ext: 'jpg' };
+}

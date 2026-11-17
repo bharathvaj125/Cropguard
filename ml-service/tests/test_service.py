@@ -86,8 +86,9 @@ def test_quality_warnings():
 
 # --- API ---------------------------------------------------------------------
 
+MODEL_NAMES = ("disease", "pest", "produce")
 needs_models = pytest.mark.skipif(
-    not all((MODELS_DIR / name / "model.onnx").is_file() for name in ("disease", "pest")),
+    not all((MODELS_DIR / name / "model.onnx").is_file() for name in MODEL_NAMES),
     reason="exported models are not present in models/",
 )
 
@@ -104,11 +105,13 @@ def client():
 
 @needs_models
 def test_health_and_model_cards(client):
-    assert client.get("/health").json() == {"status": "ok", "models": ["disease", "pest"]}
+    assert client.get("/health").json() == {"status": "ok", "models": sorted(MODEL_NAMES)}
     cards = {m["name"]: m for m in client.get("/models").json()["models"]}
     assert cards["disease"]["num_classes"] == 38
     assert cards["pest"]["num_classes"] == 26
     assert "no_pest" in cards["pest"]["labels"]
+    assert cards["produce"]["num_classes"] == 18
+    assert {label.split("__")[1] for label in cards["produce"]["labels"]} == {"Good", "Mixed", "Bad"}
     for card in cards.values():
         assert 0.5 < card["test"]["accuracy"] <= 1.0
         assert card["temperature"] > 0
@@ -134,6 +137,16 @@ def test_analyze_returns_a_probability_for_every_class(client):
     if heatmap:  # omitted when no single region matters
         assert Image.open(io.BytesIO(base64.b64decode(heatmap))).size == (448, 448)
     assert "heatmap_png_base64" not in body["pest"]
+
+
+@needs_models
+def test_produce_mode_returns_fruit_quality_classes(client):
+    files = {"file": ("fruit.jpg", jpeg_bytes(leaf_like()), "image/jpeg")}
+    body = client.post("/analyze", files=files, data={"mode": "produce"}).json()
+    assert set(body) >= {"quality", "produce", "inference_ms"} and "disease" not in body
+    predictions = body["produce"]["predictions"]
+    assert len(predictions) == 18
+    assert abs(sum(p["confidence"] for p in predictions) - 1.0) < 1e-3
 
 
 @needs_models

@@ -33,6 +33,8 @@ import { storage } from '../src/services/storage.js';
 // ---------------------------------------------------------------------------
 
 const ANSWER = {
+  title: 'गेहूं की बुवाई',
+  keyActions: ['प्रमाणित बीज लें', 'बीज उपचार करें'],
   body: '## गेहूं की बुवाई\n- समय: 1 से 20 नवंबर\n- यूरिया: 2.5 बैग प्रति एकड़',
   voiceSummary: 'गेहूं की बुवाई 1 से 20 नवंबर के बीच करें।',
   missingContextQuestions: ['क्या आपके खेत में सिंचाई की सुविधा है?'],
@@ -261,7 +263,7 @@ describe('Track B: Claude advisory service', () => {
     assert.equal(params.model, 'claude-sonnet-5-5');
     assert.equal(params.system, SYSTEM_PROMPT);
     assert.equal(params.output_config.format.type, 'json_schema');
-    assert.deepEqual(params.output_config.format.schema.required, ['body', 'voiceSummary', 'missingContextQuestions']);
+    assert.deepEqual(params.output_config.format.schema.required, ['title', 'body', 'voiceSummary', 'keyActions', 'missingContextQuestions']);
     assert.equal(params.output_config.effort, 'medium');
     assert.equal(params.fallbacks, 'default');
     assert.deepEqual(params.betas, ['server-side-fallback-2026-07-01']);
