@@ -142,6 +142,19 @@ weeklyTrendPct, outlook[7] `{ date, expected, low, high }`, action (`hold`, `sel
 | GET | `/dashboard` | Stats, weekly chart data, recent scans, upcoming activities, advisories, weather, market rows |
 | GET | `/knowledge` | `{ crops, diseases, pests }`: everything the models can recognise, with advice |
 
+## Voice and AI advisory (Track B)
+
+See [TRACK_B.md](TRACK_B.md) for setup. Every route needs sign-in; `tts`, `stt` and `llm` are rate-limited per user.
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/advisory/cloud-status` | | `{ llm: { enabled, provider, model }, tts: { enabled, languages }, stt: { enabled, languages, streamingFormats, batchFormats } }` |
+| POST | `/advisory/tts` | `{ text, language }` | `{ audioUrl, voice, cached }`. 503 when Polly is off, 422 for a language Polly has no voice for; both with `details.fallback: "browser"` |
+| POST | `/advisory/stt` | multipart `audio` (WAV, Ogg-Opus, FLAC; WebM, MP3, MP4 with S3 storage), `language` | `{ transcript, language, mode: "streaming" \| "batch" }`. 415 unknown audio, 422 no speech heard, 503 when Transcribe is off |
+| POST | `/advisory/llm` | `{ query, language, context?, history? }` | `{ body, voiceSummary, missingContextQuestions, language, source: "claude", model, usage, disclaimer }`. 503 when Claude is not configured, 502 when it cannot answer; both with `details.fallback: "rules"` |
+
+`language` accepts `hi`, `en`, `ta`, `te`, `kn`, `mr`, `bn`, `pa`, `gu`, `ml`, or locale forms such as `kn-IN`.
+
 ## Admin (role `admin`)
 
 | Method | Path | Description |

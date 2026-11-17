@@ -30,6 +30,10 @@ Each feature is mapped to the module in the client brief.
 | 6. Farmer dashboard | Scan stats, 8-week crop-health chart, recent scans, upcoming field activities, weather and market cards, admin advisories; full scan history with filters; farm records; activity log (sowing, irrigation, spraying, harvest, with costs) |
 | 7. Admin dashboard | Platform statistics and charts; user management (search, activate/deactivate, promote, delete with data); farm management; AI report monitoring with expert review (confirm / correct, visible to the farmer); advisory broadcasting by state; audit log of sign-ins and admin actions; model accuracy and system health |
 
+**Track B (voice and AI advisory, branch `track-b-cloud-ai`):** Claude crop advice through Amazon Bedrock or the
+Claude API with structured output and missing-context questions, Amazon Polly voices (Hindi, English) and Amazon
+Transcribe speech recognition (10 Indian languages), all with offline fallbacks. See [docs/TRACK_B.md](docs/TRACK_B.md).
+
 Also included: a disease and pest reference library, responsive layout (phone to desktop), keyboard
 navigation and screen-reader labels, and honest "uncertain" results instead of forced guesses.
 
@@ -99,7 +103,7 @@ estimate: [docs/DEPLOYMENT_AWS.md](docs/DEPLOYMENT_AWS.md).
 ## Tests
 
 ```bash
-cd backend && npm test          # 40 API and unit tests (auth, access control, scans, market, admin)
+cd backend && npm test          # 65 API and unit tests (auth, access control, scans, market, admin, voice/AI)
 cd ml-service && pytest         # preprocessing and inference API tests
 cd frontend && npm run lint && npm run build
 ```
@@ -130,6 +134,7 @@ docs/             architecture, API, ML and deployment documentation
 - [API reference](docs/API.md): every endpoint with request and response shapes
 - [ML models](docs/ML_MODEL.md): datasets, training, evaluation, calibration, limitations, retraining
 - [AWS deployment](docs/DEPLOYMENT_AWS.md): infrastructure, step-by-step deploy, operations, costs
+- [Track B](docs/TRACK_B.md): Claude advisory, Polly and Transcribe, and how to connect them to the voice assistant
 
 ## Disclaimer
 
